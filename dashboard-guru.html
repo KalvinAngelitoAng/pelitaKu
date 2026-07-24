@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PelitaKu - Dashboard Guru</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar-pelitaku mb-4">
+        <div class="container d-flex justify-content-between align-items-center">
+            <span class="nama-aplikasi">PelitaKu <span class="teks-lembut" style="font-size: 0.9rem;">- Guru Pembina</span></span>
+            <div class="d-flex align-items-center gap-3">
+                <span class="fw-bold" id="teksNamaGuru">Memuat...</span>
+                <button class="btn btn-pelitaku-outline btn-sm" onclick="tanganiLogout()">Keluar</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container pb-5">
+
+        <!-- TAB NAVIGASI -->
+        <ul class="nav nav-pills mb-4 gap-2" id="tabGuru" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active btn-pelitaku-primer" id="tab-murid-btn" data-bs-toggle="pill" data-bs-target="#tab-murid" type="button">Data Murid</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-jadwal-btn" data-bs-toggle="pill" data-bs-target="#tab-jadwal" type="button">Jadwal & PIN</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-kuis-btn" data-bs-toggle="pill" data-bs-target="#tab-kuis" type="button">Buat Kuis</button>
+            </li>
+        </ul>
+
+        <div class="tab-content">
+
+            <!-- TAB 1: DATA MURID -->
+            <div class="tab-pane fade show active" id="tab-murid" role="tabpanel">
+                <div class="kartu-pelitaku">
+                    <h4 class="mb-3">Rekapitulasi Murid</h4>
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Nama</th>
+                                    <th>Kelas</th>
+                                    <th>Total Poin</th>
+                                    <th>Streak Renungan</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelDaftarMurid">
+                                <tr><td colspan="5" class="text-center teks-lembut">Memuat data murid...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: JADWAL & PIN -->
+            <div class="tab-pane fade" id="tab-jadwal" role="tabpanel">
+                <div class="row g-4">
+                    <div class="col-12 col-lg-6">
+                        <div class="kartu-pelitaku">
+                            <h4 class="mb-3">Buat Jadwal Minggu Baru</h4>
+                            <p class="teks-lembut" style="font-size: 0.85rem;">Membuat jadwal baru akan otomatis menonaktifkan jadwal minggu sebelumnya.</p>
+                            <form id="formJadwalBaru">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Nama Minggu</label>
+                                    <input type="text" id="inputMingguKe" class="form-control form-control-pelitaku" placeholder="Contoh: Minggu 1 - Agustus 2026" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">PIN Absensi</label>
+                                    <div class="input-group">
+                                        <input type="text" id="inputPinBaru" class="form-control form-control-pelitaku" required>
+                                        <button type="button" class="btn btn-pelitaku-outline" id="tombolAcakPin">Acak PIN</button>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Referensi Ayat</label>
+                                    <input type="text" id="inputAyatReferensi" class="form-control form-control-pelitaku" placeholder="Contoh: Yohanes 3:16" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Isi Ayat</label>
+                                    <textarea id="inputAyatIsi" class="form-control form-control-pelitaku" rows="3" required></textarea>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6 mb-3">
+                                        <label class="form-label fw-bold">Tanggal Mulai</label>
+                                        <input type="date" id="inputTanggalMulai" class="form-control form-control-pelitaku" required>
+                                    </div>
+                                    <div class="col-6 mb-3">
+                                        <label class="form-label fw-bold">Tanggal Selesai</label>
+                                        <input type="date" id="inputTanggalSelesai" class="form-control form-control-pelitaku" required>
+                                    </div>
+                                </div>
+                                <div id="pesanStatusJadwal" class="mb-2"></div>
+                                <button type="submit" class="btn btn-pelitaku-primer w-100">Simpan Jadwal & Aktifkan</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-lg-6">
+                        <div class="kartu-pelitaku">
+                            <h4 class="mb-3">Jadwal Aktif Saat Ini</h4>
+                            <div id="wadahJadwalAktifGuru">
+                                <p class="teks-lembut">Memuat...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: BUAT KUIS -->
+            <div class="tab-pane fade" id="tab-kuis" role="tabpanel">
+                <div class="kartu-pelitaku">
+                    <h4 class="mb-3">Buat Kuis Mingguan</h4>
+                    <form id="formKuisBaru">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Judul Kuis</label>
+                            <input type="text" id="inputJudulKuis" class="form-control form-control-pelitaku" required>
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label fw-bold">Waktu Mulai</label>
+                                <input type="datetime-local" id="inputWaktuMulai" class="form-control form-control-pelitaku" required>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label fw-bold">Waktu Selesai</label>
+                                <input type="datetime-local" id="inputWaktuSelesai" class="form-control form-control-pelitaku" required>
+                            </div>
+                        </div>
+
+                        <div class="divider-pelitaku"></div>
+
+                        <h5 class="mb-3">Daftar Soal</h5>
+                        <div id="wadahDaftarSoalForm"></div>
+
+                        <button type="button" class="btn btn-pelitaku-outline mb-3" id="tombolTambahSoal">+ Tambah Soal</button>
+
+                        <div id="pesanStatusKuisBaru" class="mb-2"></div>
+                        <button type="submit" class="btn btn-pelitaku-primer w-100">Simpan Kuis</button>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODAL DETAIL MURID -->
+    <div class="modal fade" id="modalDetailMurid" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content" style="border-radius: var(--radius-sedang); border: none;">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="judulModalDetailMurid">Detail Murid</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="isiModalDetailMurid">
+                    <p class="teks-lembut">Memuat data...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/common.js"></script>
+    <script src="js/guru.js"></script>
+</body>
+</html>

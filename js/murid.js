@@ -1,0 +1,485 @@
+// =====================================================================
+// LOGIKA DASHBOARD MURID
+// =====================================================================
+
+const TARGET_POIN_REWARD = [50, 100, 150, 200]; // level target Susu Gratis
+
+let profilMurid = null;
+let jadwalAktif = null;
+let statusAbsenSaatIni = null; // 'hadir' | 'izin' | null
+let kuisAktif = null;
+let daftarSoalKuis = [];
+
+// =====================================================================
+// INISIALISASI HALAMAN
+// =====================================================================
+(async function inisialisasiDashboardMurid() {
+    profilMurid = await pastikanSudahLogin("murid");
+    if (!profilMurid) return;
+
+    document.getElementById("fotoProfilPlaceholder").innerHTML = SVG_FOTO_PROFIL;
+    document.getElementById("teksNamaMurid").textContent = profilMurid.nama_lengkap;
+    document.getElementById("teksKelasMurid").textContent = profilMurid.kelas || "-";
+    document.getElementById("teksTanggalLahirMurid").textContent = formatTanggalIndonesia(profilMurid.tanggal_lahir);
+
+    perbaruiTampilanPoin();
+
+    await muatJadwalAktif();
+    await muatStatusAbsensi();
+    await muatRenungan();
+    await muatKuis();
+
+    pasangEventListener();
+})();
+
+function pasangEventListener() {
+    document.getElementById("tombolAbsenHadir").addEventListener("click", tanganiAbsenHadir);
+    document.getElementById("tombolBukaFormIzin").addEventListener("click", () => {
+        document.getElementById("wadahFormIzin").style.display = "block";
+    });
+    document.getElementById("tombolKirimIzin").addEventListener("click", tanganiKirimIzin);
+
+    document.getElementById("inputRenungan").addEventListener("input", perbaruiJumlahKarakterRenungan);
+    document.getElementById("tombolKirimRenungan").addEventListener("click", tanganiKirimRenungan);
+
+    document.getElementById("tombolKlaimSusu").addEventListener("click", tanganiKlaimSusu);
+}
+
+// =====================================================================
+// BAGIAN POIN & REWARD (BOTOL SUSU)
+// =====================================================================
+function perbaruiTampilanPoin() {
+    const poinSaatIni = profilMurid.total_poin;
+    document.getElementById("teksInfoPoin").textContent = `Poin kamu: ${poinSaatIni}`;
+
+    muatReward(poinSaatIni);
+}
+
+async function muatReward(poinSaatIni) {
+    const { data: klaimData } = await klienSupabase
+        .from("reward_claims")
+        .select("target_poin")
+        .eq("murid_id", profilMurid.id);
+
+    const targetSudahDiklaim = new Set((klaimData || []).map((baris) => baris.target_poin));
+
+    // Cari target berikutnya yang belum diklaim (keknya)
+    let targetBerikutnya = TARGET_POIN_REWARD.find((target) => !targetSudahDiklaim.has(target));
+
+    const barProgres = document.getElementById("barProgresPoin");
+    const teksTarget = document.getElementById("teksTargetPoin");
+    const isiSusu = document.getElementById("isiSusu");
+    const tombolKlaim = document.getElementById("tombolKlaimSusu");
+
+    if (!targetBerikutnya) {
+        // Semua level sudah diklaim
+        barProgres.style.width = "100%";
+        teksTarget.textContent = "Semua level Susu Gratis sudah kamu klaim. Keren!";
+        isiSusu.setAttribute("y", 26);
+        isiSusu.setAttribute("height", 74);
+        tombolKlaim.className = "btn btn-pelitaku-nonaktif";
+        tombolKlaim.disabled = true;
+        tombolKlaim.textContent = "Sudah Diklaim";
+        return;
+    }
+
+    const persentase = Math.min(100, Math.round((poinSaatIni / targetBerikutnya) * 100));
+    barProgres.style.width = `${persentase}%`;
+    teksTarget.textContent = `${poinSaatIni} / ${targetBerikutnya} poin menuju Susu Gratis berikutnya`;
+
+    const tinggiIsi = (persentase / 100) * 74;
+    isiSusu.setAttribute("y", 100 - tinggiIsi);
+    isiSusu.setAttribute("height", tinggiIsi);
+
+    if (poinSaatIni >= targetBerikutnya) {
+        tombolKlaim.className = "btn btn-pelitaku-kuning";
+        tombolKlaim.disabled = false;
+        tombolKlaim.textContent = "Claim Susu";
+        tombolKlaim.dataset.target = targetBerikutnya;
+    } else {
+        tombolKlaim.className = "btn btn-pelitaku-nonaktif";
+        tombolKlaim.disabled = true;
+        tombolKlaim.textContent = "Claim Susu";
+    }
+}
+
+async function tanganiKlaimSusu() {
+    const tombol = document.getElementById("tombolKlaimSusu");
+    const target = parseInt(tombol.dataset.target, 10);
+    const pesanEl = document.getElementById("pesanKlaimSusu");
+
+    tombol.disabled = true;
+    tombol.textContent = "Memproses...";
+
+    const { data, error } = await klienSupabase.rpc("klaim_reward", { p_target_poin: target });
+
+    if (error || !data.sukses) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">${(data && data.pesan) || "Gagal klaim reward."}</p>`;
+        tombol.disabled = false;
+        tombol.textContent = "Claim Susu";
+        return;
+    }
+
+    pesanEl.innerHTML = `<p class="pesan-sukses mb-0">${data.pesan}</p>`;
+    await muatReward(profilMurid.total_poin);
+}
+
+// =====================================================================
+// BAGIAN JADWAL MINGGU AKTIF
+// =====================================================================
+async function muatJadwalAktif() {
+    const { data, error } = await klienSupabase
+        .from("jadwal_publik")
+        .select("*")
+        .eq("status_aktif", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (error || !data) {
+        document.getElementById("teksInfoMinggu").textContent = "Belum ada jadwal minggu ini. Hubungi Kalvin Senpai.";
+        return;
+    }
+
+    jadwalAktif = data;
+    document.getElementById("teksInfoMinggu").textContent = jadwalAktif.minggu_ke;
+    document.getElementById("teksReferensiAyat").textContent = jadwalAktif.ayat_referensi;
+    document.getElementById("teksIsiAyat").textContent = jadwalAktif.ayat_isi;
+}
+
+// =====================================================================
+// BAGIAN ABSENSI
+// =====================================================================
+async function muatStatusAbsensi() {
+    if (!jadwalAktif) {
+        tampilkanKuncianKuis("Belum ada jadwal minggu ini.");
+        return;
+    }
+
+    const { data } = await klienSupabase
+        .from("kehadiran")
+        .select("*")
+        .eq("murid_id", profilMurid.id)
+        .eq("jadwal_id", jadwalAktif.id)
+        .maybeSingle();
+
+    const badge = document.getElementById("badgeStatusAbsen");
+    const wadahForm = document.getElementById("wadahFormAbsen");
+
+    if (data) {
+        statusAbsenSaatIni = data.status;
+        if (data.status === "hadir") {
+            badge.innerHTML = `<span class="status-hadir">Hadir</span>`;
+        } else {
+            badge.innerHTML = `<span class="status-izin">Izin</span>`;
+        }
+        wadahForm.innerHTML = `<p class="teks-lembut mb-0">Kamu sudah tercatat <b>${data.status === "hadir" ? "Hadir" : "Izin"}</b> untuk minggu ini.</p>`;
+    } else {
+        badge.innerHTML = `<span class="status-belum">Belum Absen</span>`;
+    }
+}
+
+async function tanganiAbsenHadir() {
+    const pin = document.getElementById("inputPinAbsen").value.trim();
+    const pesanEl = document.getElementById("pesanStatusAbsen");
+
+    if (!jadwalAktif) return;
+    if (!pin) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">Masukkan PIN terlebih dahulu.</p>`;
+        return;
+    }
+
+    const { data, error } = await klienSupabase.rpc("catat_kehadiran", {
+        p_jadwal_id: jadwalAktif.id,
+        p_pin: pin
+    });
+
+    if (error || !data.sukses) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">${(data && data.pesan) || "Terjadi kesalahan."}</p>`;
+        return;
+    }
+
+    pesanEl.innerHTML = `<p class="pesan-sukses mb-0">${data.pesan}</p>`;
+    await muatStatusAbsensi();
+    await muatKuis();
+}
+
+async function tanganiKirimIzin() {
+    const alasan = document.getElementById("inputAlasanIzin").value.trim();
+    const pesanEl = document.getElementById("pesanStatusAbsen");
+
+    if (!jadwalAktif) return;
+    if (!alasan) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">Alasan izin wajib diisi.</p>`;
+        return;
+    }
+
+    const { error } = await klienSupabase.from("kehadiran").insert({
+        murid_id: profilMurid.id,
+        jadwal_id: jadwalAktif.id,
+        status: "izin",
+        alasan_izin: alasan
+    });
+
+    if (error) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">Gagal mengirim izin. Kamu mungkin sudah absen minggu ini.</p>`;
+        return;
+    }
+
+    pesanEl.innerHTML = `<p class="pesan-sukses mb-0">Izin berhasil dicatat.</p>`;
+    await muatStatusAbsensi();
+    await muatKuis();
+}
+
+// =====================================================================
+// BAGIAN RENUNGAN
+// =====================================================================
+function perbaruiJumlahKarakterRenungan() {
+    const isi = document.getElementById("inputRenungan").value.trim();
+    const teksJumlah = document.getElementById("teksJumlahKarakter");
+    const tombolKirim = document.getElementById("tombolKirimRenungan");
+
+    teksJumlah.textContent = `${isi.length} / 50 karakter minimal`;
+
+    if (isi.length >= 50) {
+        tombolKirim.disabled = false;
+        teksJumlah.className = "pesan-sukses mb-2 mt-1";
+    } else {
+        tombolKirim.disabled = true;
+        teksJumlah.className = "teks-lembut mb-2 mt-1";
+        teksJumlah.style.fontSize = "0.85rem";
+    }
+}
+
+async function muatRenungan() {
+    if (!jadwalAktif) return;
+
+    const { data } = await klienSupabase
+        .from("renungan")
+        .select("*")
+        .eq("murid_id", profilMurid.id)
+        .eq("jadwal_id", jadwalAktif.id)
+        .maybeSingle();
+
+    if (data) {
+        document.getElementById("wadahFormRenungan").innerHTML = `
+            <p class="pesan-sukses mb-2">Renungan minggu ini sudah dikumpulkan.</p>
+            <div class="p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
+                <p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(data.isi_renungan)}</p>
+            </div>
+        `;
+    }
+}
+
+async function tanganiKirimRenungan() {
+    const isi = document.getElementById("inputRenungan").value.trim();
+    const pesanEl = document.getElementById("pesanStatusRenungan");
+
+    if (!jadwalAktif) return;
+    if (isi.length < 50) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">Renungan minimal 50 karakter.</p>`;
+        return;
+    }
+
+    const tombol = document.getElementById("tombolKirimRenungan");
+    tombol.disabled = true;
+    tombol.textContent = "Mengirim...";
+
+    const { data, error } = await klienSupabase.rpc("submit_renungan", {
+        p_jadwal_id: jadwalAktif.id,
+        p_isi_renungan: isi
+    });
+
+    if (error || !data.sukses) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">${(data && data.pesan) || "Gagal mengirim renungan."}</p>`;
+        tombol.disabled = false;
+        tombol.textContent = "Kirim Renungan";
+        return;
+    }
+
+    profilMurid.total_poin += 1;
+    perbaruiTampilanPoin();
+    await muatRenungan();
+}
+
+// =====================================================================
+// BAGIAN KUIS
+// =====================================================================
+function tampilkanKuncianKuis(alasan) {
+    document.getElementById("wadahKuis").innerHTML = `
+        <div class="terkunci">
+            <p class="teks-lembut mb-0">Kuis terkunci. ${alasan}</p>
+        </div>
+    `;
+}
+
+async function muatKuis() {
+    if (!statusAbsenSaatIni) {
+        tampilkanKuncianKuis("Kamu harus absen Hadir atau Izin terlebih dahulu sebelum bisa mengerjakan kuis.");
+        return;
+    }
+
+    const { data: daftarKuis, error } = await klienSupabase
+        .from("kuis")
+        .select("*")
+        .order("waktu_mulai", { ascending: false })
+        .limit(1);
+
+    if (error || !daftarKuis || daftarKuis.length === 0) {
+        document.getElementById("wadahKuis").innerHTML = `<p class="teks-lembut mb-0">Belum ada kuis yang aktif saat ini.</p>`;
+        return;
+    }
+
+    kuisAktif = daftarKuis[0];
+
+    // Cek apakah sudah pernah submit
+    const { data: hasilKuis } = await klienSupabase
+        .from("jawaban_kuis")
+        .select("*")
+        .eq("murid_id", profilMurid.id)
+        .eq("kuis_id", kuisAktif.id)
+        .maybeSingle();
+
+    if (hasilKuis) {
+        document.getElementById("wadahKuis").innerHTML = `
+            <p class="pesan-sukses mb-0">Kamu sudah mengumpulkan kuis "${escapeHtml(kuisAktif.judul)}". Skor: ${hasilKuis.skor}</p>
+        `;
+        hapusProgresLocalStorage();
+        return;
+    }
+
+    const { data: soal, error: errorSoal } = await klienSupabase
+        .from("soal_kuis_publik")
+        .select("*")
+        .eq("kuis_id", kuisAktif.id)
+        .order("urutan", { ascending: true });
+
+    if (errorSoal || !soal || soal.length === 0) {
+        document.getElementById("wadahKuis").innerHTML = `<p class="teks-lembut mb-0">Soal kuis belum tersedia.</p>`;
+        return;
+    }
+
+    daftarSoalKuis = soal;
+    renderFormKuis();
+}
+
+function kunciLocalStorageKuis() {
+    return `pelitaku_progres_kuis_${kuisAktif.id}_${profilMurid.id}`;
+}
+
+function ambilProgresLocalStorage() {
+    try {
+        const data = localStorage.getItem(kunciLocalStorageKuis());
+        return data ? JSON.parse(data) : {};
+    } catch (kesalahan) {
+        return {};
+    }
+}
+
+function simpanProgresLocalStorage(jawabanSaatIni) {
+    localStorage.setItem(kunciLocalStorageKuis(), JSON.stringify(jawabanSaatIni));
+}
+
+function hapusProgresLocalStorage() {
+    if (kuisAktif) {
+        localStorage.removeItem(kunciLocalStorageKuis());
+    }
+}
+
+function renderFormKuis() {
+    const progresTersimpan = ambilProgresLocalStorage();
+
+    let htmlSoal = `
+        <p class="fw-bold mb-1">${escapeHtml(kuisAktif.judul)}</p>
+        <p class="teks-lembut mb-3" style="font-size: 0.85rem;">Batas pengerjaan: ${new Date(kuisAktif.waktu_selesai).toLocaleString("id-ID")}</p>
+        <form id="formKuis">
+    `;
+
+    daftarSoalKuis.forEach((butirSoal, indeks) => {
+        const jawabanTersimpan = progresTersimpan[butirSoal.id] || "";
+        htmlSoal += `
+            <div class="mb-4">
+                <p class="fw-bold mb-2">${indeks + 1}. ${escapeHtml(butirSoal.pertanyaan)}</p>
+                ${["a", "b", "c", "d"].map((opsi) => `
+                    <div class="form-check">
+                        <input class="form-check-input input-jawaban-kuis" type="radio"
+                            name="soal_${butirSoal.id}" value="${opsi}" data-soal-id="${butirSoal.id}"
+                            id="soal_${butirSoal.id}_${opsi}" ${jawabanTersimpan === opsi ? "checked" : ""}>
+                        <label class="form-check-label" for="soal_${butirSoal.id}_${opsi}">
+                            ${opsi.toUpperCase()}. ${escapeHtml(butirSoal["opsi_" + opsi])}
+                        </label>
+                    </div>
+                `).join("")}
+            </div>
+        `;
+    });
+
+    htmlSoal += `
+            <button type="submit" class="btn btn-pelitaku-primer">Kumpulkan Kuis</button>
+            <div id="pesanStatusKuis" class="mt-3"></div>
+        </form>
+    `;
+
+    document.getElementById("wadahKuis").innerHTML = htmlSoal;
+
+    // Simpan progres tiap kali murid memilih jawaban (just incase tbtb koneksi internet hilang thanks Dicoding)
+    document.querySelectorAll(".input-jawaban-kuis").forEach((elemenInput) => {
+        elemenInput.addEventListener("change", (peristiwa) => {
+            const progres = ambilProgresLocalStorage();
+            progres[peristiwa.target.dataset.soalId] = peristiwa.target.value;
+            simpanProgresLocalStorage(progres);
+        });
+    });
+
+    document.getElementById("formKuis").addEventListener("submit", tanganiSubmitKuis);
+}
+
+async function tanganiSubmitKuis(peristiwa) {
+    peristiwa.preventDefault();
+
+    const progres = ambilProgresLocalStorage();
+    const pesanEl = document.getElementById("pesanStatusKuis");
+
+    if (Object.keys(progres).length < daftarSoalKuis.length) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">Jawab semua soal terlebih dahulu.</p>`;
+        return;
+    }
+
+    const jawabanArray = Object.entries(progres).map(([soalId, jawaban]) => ({
+        soal_id: soalId,
+        jawaban: jawaban
+    }));
+
+    const tombolSubmit = document.querySelector("#formKuis button[type=submit]");
+    tombolSubmit.disabled = true;
+    tombolSubmit.textContent = "Mengirim...";
+
+    const { data, error } = await klienSupabase.rpc("submit_kuis", {
+        p_kuis_id: kuisAktif.id,
+        p_jawaban: jawabanArray
+    });
+
+    if (error || !data.sukses) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">${(data && data.pesan) || "Gagal mengumpulkan kuis."}</p>`;
+        tombolSubmit.disabled = false;
+        tombolSubmit.textContent = "Kumpulkan Kuis";
+        return;
+    }
+
+    hapusProgresLocalStorage();
+    profilMurid.total_poin += data.skor;
+    perbaruiTampilanPoin();
+
+    document.getElementById("wadahKuis").innerHTML = `
+        <p class="pesan-sukses mb-0">Kuis berhasil dikumpulkan. Skor kamu: ${data.skor} / ${data.total_soal}</p>
+    `;
+}
+
+// =====================================================================
+// UTILITAS
+// =====================================================================
+function escapeHtml(teks) {
+    const elemen = document.createElement("div");
+    elemen.textContent = teks;
+    return elemen.innerHTML;
+}

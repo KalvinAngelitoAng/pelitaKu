@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PelitaKu - Dashboard Murid</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar-pelitaku mb-4">
+        <div class="container d-flex justify-content-between align-items-center">
+            <span class="nama-aplikasi">PelitaKu</span>
+            <button class="btn btn-pelitaku-outline btn-sm" onclick="tanganiLogout()">Keluar</button>
+        </div>
+    </nav>
+
+    <div class="container pb-5">
+
+        <div class="row g-4">
+
+            <!-- KARTU PROFIL -->
+            <div class="col-12">
+                <div class="kartu-pelitaku d-flex align-items-center gap-3 flex-wrap">
+                    <div class="foto-profil-placeholder" id="fotoProfilPlaceholder"></div>
+                    <div>
+                        <h3 class="mb-1" id="teksNamaMurid">Memuat...</h3>
+                        <p class="teks-lembut mb-0">
+                            Kelas: <span id="teksKelasMurid">-</span> &nbsp;|&nbsp;
+                            Tanggal Lahir: <span id="teksTanggalLahirMurid">-</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KARTU POIN & REWARD -->
+            <div class="col-12">
+                <div class="kartu-pelitaku">
+                    <h4 class="mb-3">Poin & Susu Gratis</h4>
+                    <div class="wadah-botol-susu">
+                        <svg class="botol-susu-svg" width="70" height="100" viewBox="0 0 70 100" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="25" y="4" width="20" height="10" rx="3" fill="#8AA6B1"/>
+                            <path d="M20 16h30l4 14v58a6 6 0 0 1-6 6H22a6 6 0 0 1-6-6V30z" fill="#EAF4F8" stroke="#8AA6B1" stroke-width="2"/>
+                            <clipPath id="clipBotol">
+                                <path d="M20 16h30l4 14v58a6 6 0 0 1-6 6H22a6 6 0 0 1-6-6V30z"/>
+                            </clipPath>
+                            <rect id="isiSusu" x="14" y="100" width="42" height="0" fill="#FFFDF5" clip-path="url(#clipBotol)"/>
+                        </svg>
+                        <div class="flex-grow-1">
+                            <p class="mb-1 fw-bold" id="teksInfoPoin">Poin kamu: 0</p>
+                            <div class="progress progress-pelitaku">
+                                <div class="progress-bar" id="barProgresPoin" style="width: 0%"></div>
+                            </div>
+                            <p class="teks-lembut mt-1 mb-3" id="teksTargetPoin" style="font-size: 0.85rem;"></p>
+                            <button class="btn btn-pelitaku-nonaktif" id="tombolKlaimSusu" disabled>Claim Susu</button>
+                            <div id="pesanKlaimSusu" class="mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KARTU ABSENSI -->
+            <div class="col-12 col-lg-6">
+                <div class="kartu-pelitaku h-100">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h4 class="mb-0">Absensi Minggu Ini</h4>
+                        <span id="badgeStatusAbsen"></span>
+                    </div>
+                    <p class="teks-lembut mb-3" id="teksInfoMinggu">Memuat jadwal minggu ini...</p>
+
+                    <div id="wadahFormAbsen">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Masukkan PIN Absensi</label>
+                            <input type="text" id="inputPinAbsen" class="form-control form-control-pelitaku" placeholder="Contoh: 1234" maxlength="10">
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button class="btn btn-pelitaku-primer" id="tombolAbsenHadir">Hadir</button>
+                            <button class="btn btn-pelitaku-outline" id="tombolBukaFormIzin">Izin</button>
+                        </div>
+
+                        <div id="wadahFormIzin" class="mt-3" style="display: none;">
+                            <label class="form-label fw-bold">Alasan Izin</label>
+                            <textarea id="inputAlasanIzin" class="form-control form-control-pelitaku" rows="2" placeholder="Tuliskan alasan izin..."></textarea>
+                            <button class="btn btn-pelitaku-kuning mt-2" id="tombolKirimIzin">Kirim Izin</button>
+                        </div>
+
+                        <div id="pesanStatusAbsen" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KARTU RENUNGAN -->
+            <div class="col-12 col-lg-6">
+                <div class="kartu-pelitaku h-100">
+                    <h4 class="mb-3">Renungan Alkitab Hari Ini</h4>
+                    <div id="wadahAyatRenungan" class="mb-3 p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
+                        <p class="fw-bold mb-1" id="teksReferensiAyat">Memuat ayat...</p>
+                        <p class="mb-0 fst-italic" id="teksIsiAyat"></p>
+                    </div>
+
+                    <div id="wadahFormRenungan">
+                        <textarea id="inputRenungan" class="form-control form-control-pelitaku" rows="4"
+                            placeholder="Tuliskan renungan kamu tentang ayat di atas (minimal 50 karakter)..."></textarea>
+                        <p class="teks-lembut mb-2 mt-1" id="teksJumlahKarakter" style="font-size: 0.85rem;">0 / 50 karakter minimal</p>
+                        <button class="btn btn-pelitaku-primer" id="tombolKirimRenungan" disabled>Kirim Renungan</button>
+                        <div id="pesanStatusRenungan" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KARTU KUIS -->
+            <div class="col-12">
+                <div class="kartu-pelitaku">
+                    <h4 class="mb-3">Kuis Mingguan</h4>
+                    <div id="wadahKuis">
+                        <p class="teks-lembut">Memuat status kuis...</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/common.js"></script>
+    <script src="js/murid.js"></script>
+</body>
+</html>

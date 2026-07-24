@@ -1,0 +1,311 @@
+/* =====================================================================
+   PELITAKU - STYLESHEET UTAMA
+   ===================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,600&display=swap');
+
+:root {
+    /* Palet Warna */
+    --warna-krem: #FFFBF2;
+    --warna-biru-lembut: #6FB1E0;
+    --warna-biru-gelap: #3D7EB0;
+    --warna-kuning-hangat: #FFC947;
+    --warna-hijau-mint: #6FD8A6;
+    --warna-koral: #FF8A65;
+    --warna-teks-utama: #2E3A46;
+    --warna-teks-lembut: #6B7A87;
+    --warna-putih: #FFFFFF;
+    --warna-abu-nonaktif: #D9DEE3;
+
+    /* Radius & Bayangan */
+    --radius-besar: 28px;
+    --radius-sedang: 18px;
+    --radius-kecil: 12px;
+    --bayangan-lembut: 0 10px 30px rgba(61, 126, 176, 0.12);
+    --bayangan-kartu: 0 6px 18px rgba(46, 58, 70, 0.08);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--warna-krem);
+    font-family: 'Nunito', sans-serif;
+    color: var(--warna-teks-utama);
+    min-height: 100vh;
+}
+
+h1, h2, h3, h4, .font-judul {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 700;
+    color: var(--warna-teks-utama);
+}
+
+.teks-lembut {
+    color: var(--warna-teks-lembut);
+}
+
+/* =========================== KARTU =========================== */
+.kartu-pelitaku {
+    background-color: var(--warna-putih);
+    border-radius: var(--radius-besar);
+    box-shadow: var(--bayangan-kartu);
+    border: none;
+    padding: 28px;
+}
+
+.kartu-kecil {
+    border-radius: var(--radius-sedang);
+    box-shadow: var(--bayangan-kartu);
+    border: none;
+}
+
+/* =========================== HALAMAN LOGIN =========================== */
+.wadah-login {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(160deg, var(--warna-biru-lembut) 0%, var(--warna-krem) 55%);
+    padding: 20px;
+}
+
+.kartu-login {
+    background-color: var(--warna-putih);
+    border-radius: var(--radius-besar);
+    box-shadow: var(--bayangan-lembut);
+    max-width: 420px;
+    width: 100%;
+    padding: 40px 32px;
+}
+
+.logo-pelitaku {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.judul-aplikasi {
+    font-size: 2rem;
+    font-family: 'Baloo 2', sans-serif;
+    color: var(--warna-biru-gelap);
+    margin: 0;
+}
+
+/* =========================== TOMBOL =========================== */
+.btn-pelitaku-primer {
+    background-color: var(--warna-biru-lembut);
+    border: none;
+    color: var(--warna-putih);
+    border-radius: var(--radius-sedang);
+    padding: 12px 24px;
+    font-weight: 700;
+    font-family: 'Baloo 2', sans-serif;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.btn-pelitaku-primer:hover {
+    background-color: var(--warna-biru-gelap);
+    color: var(--warna-putih);
+    transform: translateY(-2px);
+}
+
+.btn-pelitaku-kuning {
+    background-color: var(--warna-kuning-hangat);
+    border: none;
+    color: var(--warna-teks-utama);
+    border-radius: var(--radius-sedang);
+    padding: 12px 24px;
+    font-weight: 700;
+    font-family: 'Baloo 2', sans-serif;
+    transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.btn-pelitaku-kuning:hover {
+    filter: brightness(0.95);
+    color: var(--warna-teks-utama);
+    transform: translateY(-2px);
+}
+
+.btn-pelitaku-hijau {
+    background-color: var(--warna-hijau-mint);
+    border: none;
+    color: var(--warna-putih);
+    border-radius: var(--radius-sedang);
+    padding: 10px 20px;
+    font-weight: 700;
+    font-family: 'Baloo 2', sans-serif;
+}
+
+.btn-pelitaku-nonaktif {
+    background-color: var(--warna-abu-nonaktif);
+    border: none;
+    color: var(--warna-teks-lembut);
+    border-radius: var(--radius-sedang);
+    padding: 12px 24px;
+    font-weight: 700;
+    font-family: 'Baloo 2', sans-serif;
+    cursor: not-allowed;
+}
+
+.btn-pelitaku-outline {
+    background-color: transparent;
+    border: 2px solid var(--warna-biru-lembut);
+    color: var(--warna-biru-gelap);
+    border-radius: var(--radius-sedang);
+    padding: 10px 20px;
+    font-weight: 700;
+    font-family: 'Baloo 2', sans-serif;
+}
+
+.form-control-pelitaku {
+    border-radius: var(--radius-kecil);
+    border: 2px solid var(--warna-abu-nonaktif);
+    padding: 10px 16px;
+}
+
+.form-control-pelitaku:focus {
+    border-color: var(--warna-biru-lembut);
+    box-shadow: 0 0 0 3px rgba(111, 177, 224, 0.25);
+}
+
+/* =========================== NAVBAR DASHBOARD =========================== */
+.navbar-pelitaku {
+    background-color: var(--warna-putih);
+    box-shadow: 0 2px 12px rgba(46, 58, 70, 0.06);
+    padding: 14px 0;
+}
+
+.navbar-pelitaku .nama-aplikasi {
+    font-family: 'Baloo 2', sans-serif;
+    font-weight: 800;
+    color: var(--warna-biru-gelap);
+    font-size: 1.4rem;
+}
+
+/* =========================== FOTO PROFIL PLACEHOLDER =========================== */
+.foto-profil-placeholder {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background-color: var(--warna-biru-lembut);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.foto-profil-placeholder svg {
+    width: 40px;
+    height: 40px;
+}
+
+/* =========================== BADGE STATUS =========================== */
+.status-hadir {
+    background-color: var(--warna-hijau-mint);
+    color: var(--warna-putih);
+    border-radius: 999px;
+    padding: 4px 14px;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.status-izin {
+    background-color: var(--warna-koral);
+    color: var(--warna-putih);
+    border-radius: 999px;
+    padding: 4px 14px;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.status-belum {
+    background-color: var(--warna-abu-nonaktif);
+    color: var(--warna-teks-lembut);
+    border-radius: 999px;
+    padding: 4px 14px;
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+/* =========================== PROGRESS BAR POIN (BOTOL SUSU) =========================== */
+.wadah-botol-susu {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.botol-susu-svg {
+    flex-shrink: 0;
+    filter: drop-shadow(0 4px 8px rgba(46, 58, 70, 0.15));
+}
+
+.progress-pelitaku {
+    height: 18px;
+    border-radius: 999px;
+    background-color: var(--warna-abu-nonaktif);
+    overflow: hidden;
+}
+
+.progress-pelitaku .progress-bar {
+    background: linear-gradient(90deg, var(--warna-kuning-hangat), var(--warna-hijau-mint));
+    border-radius: 999px;
+}
+
+/* =========================== UTIL =========================== */
+.divider-pelitaku {
+    border-top: 2px dashed var(--warna-abu-nonaktif);
+    margin: 24px 0;
+}
+
+.card-menu-murid {
+    border-radius: var(--radius-sedang);
+    background-color: var(--warna-putih);
+    box-shadow: var(--bayangan-kartu);
+    padding: 24px;
+    height: 100%;
+    transition: transform 0.15s ease;
+}
+
+.card-menu-murid:hover {
+    transform: translateY(-4px);
+}
+
+.ikon-lingkaran {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+}
+
+.terkunci {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.pesan-error {
+    color: #D64545;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.pesan-sukses {
+    color: #2E9963;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 576px) {
+    .kartu-login {
+        padding: 28px 20px;
+    }
+    .judul-aplikasi {
+        font-size: 1.6rem;
+    }
+}
