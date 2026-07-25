@@ -88,6 +88,15 @@ h1, h2, h3, h4, .font-judul {
     margin-bottom: 8px;
 }
 
+.lentera {
+    width: 92px;
+    height: 92px;
+    margin: 0 auto 14px;
+    position: relative;
+    z-index: 2;
+}
+
+
 .judul-aplikasi {
     font-size: 2rem;
     font-family: 'Baloo 2', sans-serif;
