@@ -95,19 +95,15 @@
             <!-- KARTU RENUNGAN -->
             <div class="col-12 col-lg-6">
                 <div class="kartu-pelitaku h-100">
-                    <h4 class="mb-3">Renungan Alkitab Hari Ini</h4>
+                    <div class="d-flex justify-content-between align-items-start mb-2 flex-wrap gap-2">
+                        <h4 class="mb-0">Renungan Alkitab</h4>
+                        <div id="wadahPelacakMingguan" class="d-flex gap-1 flex-wrap"></div>
+                    </div>
                     <div id="wadahAyatRenungan" class="mb-3 p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
-                        <p class="fw-bold mb-1" id="teksReferensiAyat">Memuat ayat...</p>
-                        <p class="mb-0 fst-italic" id="teksIsiAyat"></p>
+                        <p class="mb-0 teks-lembut">Memuat ayat hari ini...</p>
                     </div>
 
-                    <div id="wadahFormRenungan">
-                        <textarea id="inputRenungan" class="form-control form-control-pelitaku" rows="4"
-                            placeholder="Tuliskan renungan kamu tentang ayat di atas (minimal 50 karakter)..."></textarea>
-                        <p class="teks-lembut mb-2 mt-1" id="teksJumlahKarakter" style="font-size: 0.85rem;">0 / 50 karakter minimal</p>
-                        <button class="btn btn-pelitaku-primer" id="tombolKirimRenungan" disabled>Kirim Renungan</button>
-                        <div id="pesanStatusRenungan" class="mt-3"></div>
-                    </div>
+                    <div id="wadahFormRenungan"></div>
                 </div>
             </div>
 

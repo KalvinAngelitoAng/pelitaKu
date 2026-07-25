@@ -4,6 +4,7 @@
 
 let profilGuru = null;
 let hitungSoalKuisBaru = 0;
+let jadwalAktifIdGuru = null; // id jadwal_mingguan yang sedang aktif
 
 // =====================================================================
 // INISIALISASI HALAMAN
@@ -14,9 +15,12 @@ let hitungSoalKuisBaru = 0;
 
     document.getElementById("teksNamaGuru").textContent = profilGuru.nama_lengkap;
 
+    renderFormAyatHarian();
     await muatDaftarMurid();
     await muatJadwalAktifGuru();
-    tambahBarisSoal();
+    await muatRenunganHarian(document.getElementById("pilihanHariRenungan").value);
+    await muatDaftarKuis();
+    tambahBarisSoal(); // mulai dengan 1 baris soal kosong
 
     pasangEventListenerGuru();
 })();
@@ -30,6 +34,10 @@ function pasangEventListenerGuru() {
     document.getElementById("formJadwalBaru").addEventListener("submit", tanganiSimpanJadwalBaru);
     document.getElementById("tombolTambahSoal").addEventListener("click", tambahBarisSoal);
     document.getElementById("formKuisBaru").addEventListener("submit", tanganiSimpanKuisBaru);
+
+    document.getElementById("pilihanHariRenungan").addEventListener("change", (peristiwa) => {
+        muatRenunganHarian(peristiwa.target.value);
+    });
 }
 
 // =====================================================================
@@ -79,7 +87,7 @@ async function bukaDetailMurid(muridId, namaMurid) {
             .order("created_at", { ascending: false }),
         klienSupabase
             .from("renungan")
-            .select("*, jadwal_mingguan(minggu_ke, ayat_referensi)")
+            .select("*, jadwal_mingguan(minggu_ke), ayat_harian(hari, ayat_referensi)")
             .eq("murid_id", muridId)
             .order("created_at", { ascending: false })
     ]);
@@ -101,7 +109,10 @@ async function bukaDetailMurid(muridId, namaMurid) {
         ? `<p class="teks-lembut">Belum ada renungan yang dikirim.</p>`
         : daftarRenungan.map((renungan) => `
             <div class="mb-3 p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
-                <p class="fw-bold mb-1">${escapeHtmlGuru(renungan.jadwal_mingguan?.minggu_ke || "-")} - ${escapeHtmlGuru(renungan.jadwal_mingguan?.ayat_referensi || "-")}</p>
+                <p class="fw-bold mb-1">
+                    ${escapeHtmlGuru(renungan.jadwal_mingguan?.minggu_ke || "-")}
+                    ${renungan.ayat_harian ? ` - ${NAMA_HARI_RENUNGAN[renungan.ayat_harian.hari] || ""} (${escapeHtmlGuru(renungan.ayat_harian.ayat_referensi)})` : ""}
+                </p>
                 <p class="mb-0" style="white-space: pre-wrap;">${escapeHtmlGuru(renungan.isi_renungan)}</p>
             </div>
         `).join("");
@@ -116,8 +127,27 @@ async function bukaDetailMurid(muridId, namaMurid) {
 }
 
 // =====================================================================
-// BAGIAN JADWAL MINGGUAN & PIN
+// BAGIAN JADWAL MINGGUAN, PIN & AYAT HARIAN
 // =====================================================================
+
+/**
+ * Membuat 6 blok input ayat harian (Senin-Sabtu) di form "Buat Jadwal Minggu Baru".
+ */
+function renderFormAyatHarian() {
+    const wadah = document.getElementById("wadahAyatHarianForm");
+    wadah.innerHTML = [1, 2, 3, 4, 5, 6].map((kodeHari) => `
+        <div class="mb-3 p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
+            <p class="fw-bold mb-2">${NAMA_HARI_RENUNGAN[kodeHari]}</p>
+            <div class="mb-2">
+                <input type="text" class="form-control form-control-pelitaku input-ayat-referensi-hari"
+                    data-hari="${kodeHari}" placeholder="Referensi ayat, contoh: Yohanes 3:16" required>
+            </div>
+            <textarea class="form-control form-control-pelitaku input-ayat-isi-hari"
+                data-hari="${kodeHari}" rows="2" placeholder="Isi ayat..." required></textarea>
+        </div>
+    `).join("");
+}
+
 async function muatJadwalAktifGuru() {
     const { data, error } = await klienSupabase
         .from("jadwal_mingguan")
@@ -131,16 +161,30 @@ async function muatJadwalAktifGuru() {
 
     if (error || !data) {
         wadah.innerHTML = `<p class="teks-lembut">Belum ada jadwal aktif.</p>`;
+        jadwalAktifIdGuru = null;
         return;
     }
+
+    jadwalAktifIdGuru = data.id;
+
+    const { data: daftarAyat } = await klienSupabase
+        .from("ayat_harian")
+        .select("*")
+        .eq("jadwal_id", data.id)
+        .order("hari", { ascending: true });
+
+    const htmlAyat = (daftarAyat || []).map((ayat) => `
+        <li><b>${NAMA_HARI_RENUNGAN[ayat.hari]}</b>: ${escapeHtmlGuru(ayat.ayat_referensi)}</li>
+    `).join("");
 
     wadah.innerHTML = `
         <p class="fw-bold mb-1">${escapeHtmlGuru(data.minggu_ke)}</p>
         <p class="mb-1">PIN Absensi: <span class="fw-bold" style="letter-spacing: 2px;">${escapeHtmlGuru(data.pin_absensi)}</span></p>
-        <p class="mb-1">Ayat: ${escapeHtmlGuru(data.ayat_referensi)}</p>
-        <p class="teks-lembut mb-0" style="font-size: 0.85rem;">
+        <p class="teks-lembut mb-2" style="font-size: 0.85rem;">
             Periode: ${formatTanggalIndonesia(data.tanggal_mulai)} - ${formatTanggalIndonesia(data.tanggal_selesai)}
         </p>
+        <p class="mb-1 fw-bold" style="font-size: 0.9rem;">Ayat Harian (${(daftarAyat || []).length}/6 terisi)</p>
+        <ul class="mb-0" style="font-size: 0.9rem;">${htmlAyat || "<li class='teks-lembut'>Belum ada ayat harian.</li>"}</ul>
     `;
 }
 
@@ -148,30 +192,192 @@ async function tanganiSimpanJadwalBaru(peristiwa) {
     peristiwa.preventDefault();
     const pesanEl = document.getElementById("pesanStatusJadwal");
 
-    const dataBaru = {
+    const inputReferensi = document.querySelectorAll(".input-ayat-referensi-hari");
+    const inputIsi = document.querySelectorAll(".input-ayat-isi-hari");
+
+    const daftarAyatHarian = [];
+    for (let i = 0; i < inputReferensi.length; i++) {
+        const referensi = inputReferensi[i].value.trim();
+        const isi = inputIsi[i].value.trim();
+        const hari = parseInt(inputReferensi[i].dataset.hari, 10);
+
+        if (!referensi || !isi) {
+            pesanEl.innerHTML = `<p class="pesan-error mb-0">Lengkapi ayat untuk hari ${NAMA_HARI_RENUNGAN[hari]}.</p>`;
+            return;
+        }
+
+        daftarAyatHarian.push({ hari, ayat_referensi: referensi, ayat_isi: isi });
+    }
+
+    const dataJadwalBaru = {
         minggu_ke: document.getElementById("inputMingguKe").value.trim(),
         pin_absensi: document.getElementById("inputPinBaru").value.trim(),
-        ayat_referensi: document.getElementById("inputAyatReferensi").value.trim(),
-        ayat_isi: document.getElementById("inputAyatIsi").value.trim(),
         tanggal_mulai: document.getElementById("inputTanggalMulai").value,
         tanggal_selesai: document.getElementById("inputTanggalSelesai").value,
         dibuat_oleh: profilGuru.id,
         status_aktif: true
     };
 
-    // Nonaktifkan jadwal yg sebelumnya agar hanya ada 1 jadwal aktif
+    const tombolSimpan = document.querySelector("#formJadwalBaru button[type=submit]");
+    tombolSimpan.disabled = true;
+    tombolSimpan.textContent = "Menyimpan...";
+
+    // Nonaktifkan jadwal-jadwal sebelumnya agar hanya ada 1 jadwal aktif
     await klienSupabase.from("jadwal_mingguan").update({ status_aktif: false }).eq("status_aktif", true);
 
-    const { error } = await klienSupabase.from("jadwal_mingguan").insert(dataBaru);
+    const { data: jadwalBaru, error: errorJadwal } = await klienSupabase
+        .from("jadwal_mingguan")
+        .insert(dataJadwalBaru)
+        .select()
+        .single();
 
-    if (error) {
-        pesanEl.innerHTML = `<p class="pesan-error mb-0">Gagal menyimpan jadwal: ${error.message}</p>`;
+    if (errorJadwal || !jadwalBaru) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">Gagal menyimpan jadwal: ${errorJadwal ? errorJadwal.message : "tidak diketahui"}</p>`;
+        tombolSimpan.disabled = false;
+        tombolSimpan.textContent = "Simpan Jadwal & Aktifkan";
         return;
     }
 
-    pesanEl.innerHTML = `<p class="pesan-sukses mb-0">Jadwal baru berhasil disimpan dan diaktifkan.</p>`;
+    const ayatHarianDenganJadwalId = daftarAyatHarian.map((ayat) => ({ ...ayat, jadwal_id: jadwalBaru.id }));
+    const { error: errorAyat } = await klienSupabase.from("ayat_harian").insert(ayatHarianDenganJadwalId);
+
+    tombolSimpan.disabled = false;
+    tombolSimpan.textContent = "Simpan Jadwal & Aktifkan";
+
+    if (errorAyat) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">Jadwal tersimpan, tetapi gagal menyimpan ayat harian: ${errorAyat.message}</p>`;
+        return;
+    }
+
+    pesanEl.innerHTML = `<p class="pesan-sukses mb-0">Jadwal baru & 6 ayat harian berhasil disimpan dan diaktifkan.</p>`;
     document.getElementById("formJadwalBaru").reset();
+    renderFormAyatHarian();
     await muatJadwalAktifGuru();
+    await muatRenunganHarian(document.getElementById("pilihanHariRenungan").value);
+}
+
+// =====================================================================
+// BAGIAN RENUNGAN HARIAN (guru membaca jawaban murid per hari)
+// =====================================================================
+async function muatRenunganHarian(hariTerpilihString) {
+    const hariTerpilih = parseInt(hariTerpilihString, 10);
+    const wadahAyat = document.getElementById("wadahAyatHariTerpilih");
+    const wadahRenungan = document.getElementById("wadahRenunganHarian");
+
+    if (!jadwalAktifIdGuru) {
+        wadahAyat.innerHTML = `<p class="teks-lembut mb-0">Belum ada jadwal minggu aktif.</p>`;
+        wadahRenungan.innerHTML = "";
+        return;
+    }
+
+    const { data: ayatHari } = await klienSupabase
+        .from("ayat_harian")
+        .select("*")
+        .eq("jadwal_id", jadwalAktifIdGuru)
+        .eq("hari", hariTerpilih)
+        .maybeSingle();
+
+    if (!ayatHari) {
+        wadahAyat.innerHTML = `<p class="teks-lembut mb-0">Ayat untuk hari ${NAMA_HARI_RENUNGAN[hariTerpilih]} belum diisi pada jadwal minggu ini.</p>`;
+        wadahRenungan.innerHTML = "";
+        return;
+    }
+
+    wadahAyat.innerHTML = `
+        <p class="fw-bold mb-1">${escapeHtmlGuru(ayatHari.ayat_referensi)}</p>
+        <p class="mb-0 fst-italic">${escapeHtmlGuru(ayatHari.ayat_isi)}</p>
+    `;
+
+    wadahRenungan.innerHTML = `<p class="teks-lembut">Memuat renungan murid...</p>`;
+
+    const { data: daftarRenungan, error } = await klienSupabase
+        .from("renungan")
+        .select("*, profil(nama_lengkap, kelas)")
+        .eq("ayat_harian_id", ayatHari.id)
+        .order("created_at", { ascending: true });
+
+    if (error || !daftarRenungan || daftarRenungan.length === 0) {
+        wadahRenungan.innerHTML = `<p class="teks-lembut mb-0">Belum ada murid yang mengisi renungan untuk hari ini.</p>`;
+        return;
+    }
+
+    wadahRenungan.innerHTML = daftarRenungan.map((renungan) => `
+        <div class="mb-3 p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
+            <p class="fw-bold mb-1">${escapeHtmlGuru(renungan.profil?.nama_lengkap || "Murid")} <span class="teks-lembut fw-normal">(${escapeHtmlGuru(renungan.profil?.kelas || "-")})</span></p>
+            <p class="mb-0" style="white-space: pre-wrap;">${escapeHtmlGuru(renungan.isi_renungan)}</p>
+        </div>
+    `).join("");
+}
+
+// =====================================================================
+// BAGIAN DAFTAR & DETAIL KUIS
+// =====================================================================
+async function muatDaftarKuis() {
+    const { data: daftarKuis, error } = await klienSupabase
+        .from("kuis")
+        .select("*")
+        .order("waktu_mulai", { ascending: false });
+
+    const tabel = document.getElementById("tabelDaftarKuis");
+
+    if (error || !daftarKuis || daftarKuis.length === 0) {
+        tabel.innerHTML = `<tr><td colspan="5" class="text-center teks-lembut">Belum ada kuis yang dibuat.</td></tr>`;
+        return;
+    }
+
+    tabel.innerHTML = daftarKuis.map((kuis) => {
+        const status = tentukanStatusKuis(kuis.waktu_mulai, kuis.waktu_selesai);
+        const labelStatus = status === "aktif"
+            ? '<span class="status-hadir">Sedang Berlangsung</span>'
+            : status === "akan_datang"
+                ? '<span class="status-belum">Akan Datang</span>'
+                : '<span class="status-izin">Sudah Berakhir</span>';
+
+        return `
+            <tr>
+                <td>${escapeHtmlGuru(kuis.judul)}</td>
+                <td>${new Date(kuis.waktu_mulai).toLocaleString("id-ID")}</td>
+                <td>${new Date(kuis.waktu_selesai).toLocaleString("id-ID")}</td>
+                <td>${labelStatus}</td>
+                <td>
+                    <button class="btn btn-pelitaku-outline btn-sm" onclick="bukaDetailSoalKuis('${kuis.id}', '${escapeHtmlGuru(kuis.judul)}')">
+                        Lihat Soal
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join("");
+}
+
+async function bukaDetailSoalKuis(kuisId, judulKuis) {
+    document.getElementById("judulModalDetailKuis").textContent = `Soal: ${judulKuis}`;
+    document.getElementById("isiModalDetailKuis").innerHTML = `<p class="teks-lembut">Memuat soal...</p>`;
+
+    const modal = new bootstrap.Modal(document.getElementById("modalDetailKuis"));
+    modal.show();
+
+    const { data: daftarSoal, error } = await klienSupabase
+        .from("soal_kuis")
+        .select("*")
+        .eq("kuis_id", kuisId)
+        .order("urutan", { ascending: true });
+
+    if (error || !daftarSoal || daftarSoal.length === 0) {
+        document.getElementById("isiModalDetailKuis").innerHTML = `<p class="teks-lembut mb-0">Belum ada soal untuk kuis ini.</p>`;
+        return;
+    }
+
+    document.getElementById("isiModalDetailKuis").innerHTML = daftarSoal.map((soal, indeks) => `
+        <div class="mb-4">
+            <p class="fw-bold mb-2">${indeks + 1}. ${escapeHtmlGuru(soal.pertanyaan)}</p>
+            ${["a", "b", "c", "d"].map((opsi) => `
+                <p class="mb-1 ${soal.kunci_jawaban === opsi ? "pesan-sukses fw-bold" : ""}">
+                    ${opsi.toUpperCase()}. ${escapeHtmlGuru(soal["opsi_" + opsi])}
+                    ${soal.kunci_jawaban === opsi ? " (Kunci Jawaban)" : ""}
+                </p>
+            `).join("")}
+        </div>
+    `).join("");
 }
 
 // =====================================================================
@@ -231,6 +437,11 @@ async function tanganiSimpanKuisBaru(peristiwa) {
     const waktuMulai = document.getElementById("inputWaktuMulai").value;
     const waktuSelesai = document.getElementById("inputWaktuSelesai").value;
 
+    if (!waktuMulai || !waktuSelesai || new Date(waktuSelesai) <= new Date(waktuMulai)) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">Waktu selesai harus setelah waktu mulai.</p>`;
+        return;
+    }
+
     const barisSoal = document.querySelectorAll("#wadahDaftarSoalForm > div");
     if (barisSoal.length === 0) {
         pesanEl.innerHTML = `<p class="pesan-error mb-0">Tambahkan minimal 1 soal.</p>`;
@@ -257,18 +468,15 @@ async function tanganiSimpanKuisBaru(peristiwa) {
         });
     }
 
-    // Ambil jadwal aktif untuk dikaitkan dengan kuis
-    const { data: jadwalAktif } = await klienSupabase
-        .from("jadwal_mingguan")
-        .select("id")
-        .eq("status_aktif", true)
-        .maybeSingle();
+    const tombolSimpan = document.querySelector("#formKuisBaru button[type=submit]");
+    tombolSimpan.disabled = true;
+    tombolSimpan.textContent = "Menyimpan...";
 
     const { data: kuisBaru, error: errorKuis } = await klienSupabase
         .from("kuis")
         .insert({
             judul,
-            jadwal_id: jadwalAktif ? jadwalAktif.id : null,
+            jadwal_id: jadwalAktifIdGuru,
             waktu_mulai: new Date(waktuMulai).toISOString(),
             waktu_selesai: new Date(waktuSelesai).toISOString(),
             dibuat_oleh: profilGuru.id
@@ -278,6 +486,8 @@ async function tanganiSimpanKuisBaru(peristiwa) {
 
     if (errorKuis || !kuisBaru) {
         pesanEl.innerHTML = `<p class="pesan-error mb-0">Gagal membuat kuis: ${errorKuis ? errorKuis.message : "tidak diketahui"}</p>`;
+        tombolSimpan.disabled = false;
+        tombolSimpan.textContent = "Simpan Kuis";
         return;
     }
 
@@ -289,6 +499,9 @@ async function tanganiSimpanKuisBaru(peristiwa) {
 
     const { error: errorSoal } = await klienSupabase.from("soal_kuis").insert(soalDenganKuisId);
 
+    tombolSimpan.disabled = false;
+    tombolSimpan.textContent = "Simpan Kuis";
+
     if (errorSoal) {
         pesanEl.innerHTML = `<p class="pesan-error mb-0">Kuis tersimpan, tetapi gagal menyimpan soal: ${errorSoal.message}</p>`;
         return;
@@ -299,6 +512,7 @@ async function tanganiSimpanKuisBaru(peristiwa) {
     document.getElementById("wadahDaftarSoalForm").innerHTML = "";
     hitungSoalKuisBaru = 0;
     tambahBarisSoal();
+    await muatDaftarKuis();
 }
 
 // =====================================================================

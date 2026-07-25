@@ -9,6 +9,8 @@ let jadwalAktif = null;
 let statusAbsenSaatIni = null; // 'hadir' | 'izin' | null
 let kuisAktif = null;
 let daftarSoalKuis = [];
+let daftarAyatHarianMinggu = []; // 6 ayat (Senin-Sabtu) untuk jadwal aktif
+let ayatHarianAktif = null; // ayat untuk hari ini (null jika hari Minggu / belum diisi guru)
 
 // =====================================================================
 // INISIALISASI HALAMAN
@@ -26,7 +28,7 @@ let daftarSoalKuis = [];
 
     await muatJadwalAktif();
     await muatStatusAbsensi();
-    await muatRenungan();
+    await muatAyatDanRenunganHarian();
     await muatKuis();
 
     pasangEventListener();
@@ -39,8 +41,8 @@ function pasangEventListener() {
     });
     document.getElementById("tombolKirimIzin").addEventListener("click", tanganiKirimIzin);
 
-    document.getElementById("inputRenungan").addEventListener("input", perbaruiJumlahKarakterRenungan);
-    document.getElementById("tombolKirimRenungan").addEventListener("click", tanganiKirimRenungan);
+    // Catatan: listener untuk textarea & tombol renungan dipasang secara dinamis
+    // di dalam muatAyatDanRenunganHarian(), karena form-nya berubah tiap hari.
 
     document.getElementById("tombolKlaimSusu").addEventListener("click", tanganiKlaimSusu);
 }
@@ -63,7 +65,7 @@ async function muatReward(poinSaatIni) {
 
     const targetSudahDiklaim = new Set((klaimData || []).map((baris) => baris.target_poin));
 
-    // Cari target berikutnya yang belum diklaim (keknya)
+    // Cari target berikutnya yang belum diklaim
     let targetBerikutnya = TARGET_POIN_REWARD.find((target) => !targetSudahDiklaim.has(target));
 
     const barProgres = document.getElementById("barProgresPoin");
@@ -74,7 +76,7 @@ async function muatReward(poinSaatIni) {
     if (!targetBerikutnya) {
         // Semua level sudah diklaim
         barProgres.style.width = "100%";
-        teksTarget.textContent = "Semua level Susu Gratis sudah kamu klaim. Keren!";
+        teksTarget.textContent = "Semua level Susu Gratis sudah kamu klaim. Hebat!";
         isiSusu.setAttribute("y", 26);
         isiSusu.setAttribute("height", 74);
         tombolKlaim.className = "btn btn-pelitaku-nonaktif";
@@ -137,14 +139,12 @@ async function muatJadwalAktif() {
         .maybeSingle();
 
     if (error || !data) {
-        document.getElementById("teksInfoMinggu").textContent = "Belum ada jadwal minggu ini. Hubungi Kalvin Senpai.";
+        document.getElementById("teksInfoMinggu").textContent = "Belum ada jadwal minggu ini. Hubungi guru pembina.";
         return;
     }
 
     jadwalAktif = data;
     document.getElementById("teksInfoMinggu").textContent = jadwalAktif.minggu_ke;
-    document.getElementById("teksReferensiAyat").textContent = jadwalAktif.ayat_referensi;
-    document.getElementById("teksIsiAyat").textContent = jadwalAktif.ayat_isi;
 }
 
 // =====================================================================
@@ -251,23 +251,96 @@ function perbaruiJumlahKarakterRenungan() {
     }
 }
 
-async function muatRenungan() {
-    if (!jadwalAktif) return;
+/**
+ * Memuat 6 ayat harian (Senin-Sabtu) minggu ini, menampilkan pelacak progres,
+ * lalu menampilkan ayat & form renungan sesuai hari berjalan saat ini.
+ */
+async function muatAyatDanRenunganHarian() {
+    const wadahAyat = document.getElementById("wadahAyatRenungan");
+    const wadahForm = document.getElementById("wadahFormRenungan");
+    const wadahPelacak = document.getElementById("wadahPelacakMingguan");
 
-    const { data } = await klienSupabase
-        .from("renungan")
+    if (!jadwalAktif) {
+        wadahAyat.innerHTML = `<p class="teks-lembut mb-0">Belum ada jadwal minggu ini.</p>`;
+        wadahForm.innerHTML = "";
+        wadahPelacak.innerHTML = "";
+        return;
+    }
+
+    const { data: ayatMinggu, error: errorAyat } = await klienSupabase
+        .from("ayat_harian_publik")
         .select("*")
-        .eq("murid_id", profilMurid.id)
         .eq("jadwal_id", jadwalAktif.id)
-        .maybeSingle();
+        .order("hari", { ascending: true });
 
-    if (data) {
-        document.getElementById("wadahFormRenungan").innerHTML = `
-            <p class="pesan-sukses mb-2">Renungan minggu ini sudah dikumpulkan.</p>
+    daftarAyatHarianMinggu = ayatMinggu || [];
+
+    const { data: renunganTerkirim } = await klienSupabase
+        .from("renungan")
+        .select("ayat_harian_id, isi_renungan")
+        .eq("murid_id", profilMurid.id)
+        .eq("jadwal_id", jadwalAktif.id);
+
+    const petaRenunganTerkirim = {};
+    (renunganTerkirim || []).forEach((baris) => {
+        petaRenunganTerkirim[baris.ayat_harian_id] = baris.isi_renungan;
+    });
+
+    // Render chip pelacak progres Senin-Sabtu
+    wadahPelacak.innerHTML = [1, 2, 3, 4, 5, 6].map((kodeHari) => {
+        const ayatHari = daftarAyatHarianMinggu.find((a) => a.hari === kodeHari);
+        const sudahSelesai = ayatHari && petaRenunganTerkirim[ayatHari.id];
+        const kelas = sudahSelesai ? "status-hadir" : "status-belum";
+        return `<span class="${kelas}" style="font-size: 0.75rem;">${NAMA_HARI_RENUNGAN[kodeHari]}</span>`;
+    }).join(" ");
+
+    if (errorAyat) {
+        wadahAyat.innerHTML = `<p class="teks-lembut mb-0">Gagal memuat ayat renungan.</p>`;
+        wadahForm.innerHTML = "";
+        return;
+    }
+
+    const kodeHariIni = ambilKodeHariRenunganHariIni();
+
+    if (kodeHariIni === null) {
+        wadahAyat.innerHTML = `<p class="mb-0 fw-bold">Hari ini hari Minggu.</p><p class="mb-0 teks-lembut">Waktunya beribadah dan absen di Sekolah Minggu. Renungan harian dibuka lagi besok Senin.</p>`;
+        wadahForm.innerHTML = "";
+        return;
+    }
+
+    ayatHarianAktif = daftarAyatHarianMinggu.find((a) => a.hari === kodeHariIni);
+
+    if (!ayatHarianAktif) {
+        wadahAyat.innerHTML = `<p class="mb-0 teks-lembut">Ayat untuk hari ${NAMA_HARI_RENUNGAN[kodeHariIni]} belum diisi oleh guru pembina. Coba cek lagi nanti.</p>`;
+        wadahForm.innerHTML = "";
+        return;
+    }
+
+    wadahAyat.innerHTML = `
+        <p class="teks-lembut mb-1" style="font-size: 0.8rem;">Renungan hari ${NAMA_HARI_RENUNGAN[kodeHariIni]}</p>
+        <p class="fw-bold mb-1">${escapeHtml(ayatHarianAktif.ayat_referensi)}</p>
+        <p class="mb-0 fst-italic">${escapeHtml(ayatHarianAktif.ayat_isi)}</p>
+    `;
+
+    const isiSudahDikirim = petaRenunganTerkirim[ayatHarianAktif.id];
+
+    if (isiSudahDikirim) {
+        wadahForm.innerHTML = `
+            <p class="pesan-sukses mb-2">Renungan hari ${NAMA_HARI_RENUNGAN[kodeHariIni]} sudah dikumpulkan.</p>
             <div class="p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
-                <p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(data.isi_renungan)}</p>
+                <p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(isiSudahDikirim)}</p>
             </div>
         `;
+    } else {
+        wadahForm.innerHTML = `
+            <textarea id="inputRenungan" class="form-control form-control-pelitaku" rows="4"
+                placeholder="Tuliskan renungan kamu tentang ayat di atas (minimal 50 karakter)..."></textarea>
+            <p class="teks-lembut mb-2 mt-1" id="teksJumlahKarakter" style="font-size: 0.85rem;">0 / 50 karakter minimal</p>
+            <button class="btn btn-pelitaku-primer" id="tombolKirimRenungan" disabled>Kirim Renungan</button>
+            <div id="pesanStatusRenungan" class="mt-3"></div>
+        `;
+        document.getElementById("inputRenungan").addEventListener("input", perbaruiJumlahKarakterRenungan);
+        document.getElementById("tombolKirimRenungan").addEventListener("click", tanganiKirimRenungan);
     }
 }
 
@@ -275,7 +348,7 @@ async function tanganiKirimRenungan() {
     const isi = document.getElementById("inputRenungan").value.trim();
     const pesanEl = document.getElementById("pesanStatusRenungan");
 
-    if (!jadwalAktif) return;
+    if (!ayatHarianAktif) return;
     if (isi.length < 50) {
         pesanEl.innerHTML = `<p class="pesan-error mb-0">Renungan minimal 50 karakter.</p>`;
         return;
@@ -286,7 +359,7 @@ async function tanganiKirimRenungan() {
     tombol.textContent = "Mengirim...";
 
     const { data, error } = await klienSupabase.rpc("submit_renungan", {
-        p_jadwal_id: jadwalAktif.id,
+        p_ayat_harian_id: ayatHarianAktif.id,
         p_isi_renungan: isi
     });
 
@@ -299,7 +372,7 @@ async function tanganiKirimRenungan() {
 
     profilMurid.total_poin += 1;
     perbaruiTampilanPoin();
-    await muatRenungan();
+    await muatAyatDanRenunganHarian();
 }
 
 // =====================================================================
@@ -319,20 +392,23 @@ async function muatKuis() {
         return;
     }
 
+    // Ambil status kuis (judul & waktu) dari view publik, terlepas dari jendela waktu,
+    // supaya murid tahu persis kenapa kuis belum/tidak bisa dikerjakan.
     const { data: daftarKuis, error } = await klienSupabase
-        .from("kuis")
+        .from("kuis_status_publik")
         .select("*")
         .order("waktu_mulai", { ascending: false })
         .limit(1);
 
     if (error || !daftarKuis || daftarKuis.length === 0) {
-        document.getElementById("wadahKuis").innerHTML = `<p class="teks-lembut mb-0">Belum ada kuis yang aktif saat ini.</p>`;
+        document.getElementById("wadahKuis").innerHTML = `<p class="teks-lembut mb-0">Belum ada kuis yang dijadwalkan untuk minggu ini.</p>`;
         return;
     }
 
     kuisAktif = daftarKuis[0];
+    const status = tentukanStatusKuis(kuisAktif.waktu_mulai, kuisAktif.waktu_selesai);
 
-    // Cek apakah sudah pernah submit
+    // Cek apakah sudah pernah submit (berlaku untuk status apa pun, termasuk sudah berakhir)
     const { data: hasilKuis } = await klienSupabase
         .from("jawaban_kuis")
         .select("*")
@@ -348,6 +424,21 @@ async function muatKuis() {
         return;
     }
 
+    if (status === "akan_datang") {
+        document.getElementById("wadahKuis").innerHTML = `
+            <p class="teks-lembut mb-0">Kuis "${escapeHtml(kuisAktif.judul)}" akan dibuka pada ${new Date(kuisAktif.waktu_mulai).toLocaleString("id-ID")}. Kembali lagi nanti ya.</p>
+        `;
+        return;
+    }
+
+    if (status === "berakhir") {
+        document.getElementById("wadahKuis").innerHTML = `
+            <p class="teks-lembut mb-0">Waktu pengerjaan kuis "${escapeHtml(kuisAktif.judul)}" sudah berakhir pada ${new Date(kuisAktif.waktu_selesai).toLocaleString("id-ID")}.</p>
+        `;
+        return;
+    }
+
+    // status === 'aktif'
     const { data: soal, error: errorSoal } = await klienSupabase
         .from("soal_kuis_publik")
         .select("*")
@@ -355,7 +446,7 @@ async function muatKuis() {
         .order("urutan", { ascending: true });
 
     if (errorSoal || !soal || soal.length === 0) {
-        document.getElementById("wadahKuis").innerHTML = `<p class="teks-lembut mb-0">Soal kuis belum tersedia.</p>`;
+        document.getElementById("wadahKuis").innerHTML = `<p class="teks-lembut mb-0">Kuis "${escapeHtml(kuisAktif.judul)}" sedang aktif, tetapi soal belum tersedia. Hubungi guru pembina.</p>`;
         return;
     }
 
@@ -422,7 +513,7 @@ function renderFormKuis() {
 
     document.getElementById("wadahKuis").innerHTML = htmlSoal;
 
-    // Simpan progres tiap kali murid memilih jawaban (just incase tbtb koneksi internet hilang thanks Dicoding)
+    // Simpan progres tiap kali murid memilih jawaban (agar tidak hilang jika koneksi putus)
     document.querySelectorAll(".input-jawaban-kuis").forEach((elemenInput) => {
         elemenInput.addEventListener("change", (peristiwa) => {
             const progres = ambilProgresLocalStorage();

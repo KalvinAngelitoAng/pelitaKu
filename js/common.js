@@ -1,6 +1,6 @@
 // =====================================================================
-// FUNGSI UTAMA
-// Dipake di dashboard-murid.html dan dashboard-guru.html
+// FUNGSI BERSAMA
+// Dipakai di dashboard-murid.html dan dashboard-guru.html
 // =====================================================================
 
 // SVG siluet sederhana untuk foto profil (hardcode, tidak bisa diganti user)
@@ -12,7 +12,7 @@ const SVG_FOTO_PROFIL = `
 /**
  * Memastikan pengguna sudah login. Jika belum, arahkan ke halaman login.
  * Mengembalikan objek profil (dari tabel profil) jika berhasil.
-  @param {string} peranWajib
+ * @param {string} peranWajib - 'murid' atau 'guru', untuk proteksi akses halaman.
  */
 async function pastikanSudahLogin(peranWajib) {
     const { data: sesiData } = await klienSupabase.auth.getSession();
@@ -38,7 +38,7 @@ async function pastikanSudahLogin(peranWajib) {
     }
 
     if (profil.role !== peranWajib) {
-        // Jika role tidak sesuai halaman arahkan ke dashboard yang benar
+        // Jika role tidak sesuai halaman, arahkan ke dashboard yang benar
         window.location.href = profil.role === "guru" ? "dashboard-guru.html" : "dashboard-murid.html";
         return null;
     }
@@ -46,17 +46,54 @@ async function pastikanSudahLogin(peranWajib) {
     return profil;
 }
 
-// Menangani Logout
+/**
+ * Menangani proses logout dari tombol "Keluar" di navbar.
+ */
 async function tanganiLogout() {
     await klienSupabase.auth.signOut();
     window.location.href = "index.html";
 }
 
-
- // Format tanggal
-
+/**
+ * Format tanggal ke format Indonesia yang mudah dibaca.
+ */
 function formatTanggalIndonesia(tanggalString) {
     if (!tanggalString) return "-";
     const opsi = { day: "numeric", month: "long", year: "numeric" };
     return new Date(tanggalString).toLocaleDateString("id-ID", opsi);
+}
+
+// Nama hari untuk renungan (indeks 1 = Senin ... 6 = Sabtu, sesuai kolom "hari" di ayat_harian)
+const NAMA_HARI_RENUNGAN = {
+    1: "Senin",
+    2: "Selasa",
+    3: "Rabu",
+    4: "Kamis",
+    5: "Jumat",
+    6: "Sabtu"
+};
+
+/**
+ * Mengubah hasil JS Date.getDay() (0=Minggu...6=Sabtu) menjadi kode hari
+ * renungan PelitaKu (1=Senin...6=Sabtu). Mengembalikan null untuk hari Minggu,
+ * karena hari Minggu dipakai untuk absensi, bukan renungan.
+ */
+function ambilKodeHariRenunganHariIni() {
+    const hariJs = new Date().getDay(); // 0=Minggu, 1=Senin, ..., 6=Sabtu
+    if (hariJs === 0) return null;
+    return hariJs; // kebetulan 1=Senin...6=Sabtu sama persis dengan kode hari kita
+}
+
+/**
+ * Menentukan status kuis berdasarkan waktu_mulai & waktu_selesai.
+ * Mengembalikan salah satu: 'akan_datang', 'aktif', 'berakhir'.
+ */
+function tentukanStatusKuis(waktuMulai, waktuSelesai) {
+    const sekarang = new Date();
+    const mulai = new Date(waktuMulai);
+    const selesai = new Date(waktuSelesai);
+
+    if (sekarang < mulai) return "akan_datang";
+    if (sekarang > selesai) return "berakhir";
+    return "aktif";
 }

@@ -32,6 +32,9 @@
                 <button class="nav-link" id="tab-jadwal-btn" data-bs-toggle="pill" data-bs-target="#tab-jadwal" type="button">Jadwal & PIN</button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab-renungan-btn" data-bs-toggle="pill" data-bs-target="#tab-renungan" type="button">Renungan Harian</button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="tab-kuis-btn" data-bs-toggle="pill" data-bs-target="#tab-kuis" type="button">Buat Kuis</button>
             </li>
         </ul>
@@ -80,25 +83,23 @@
                                         <button type="button" class="btn btn-pelitaku-outline" id="tombolAcakPin">Acak PIN</button>
                                     </div>
                                 </div>
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Referensi Ayat</label>
-                                    <input type="text" id="inputAyatReferensi" class="form-control form-control-pelitaku" placeholder="Contoh: Yohanes 3:16" required>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label fw-bold">Isi Ayat</label>
-                                    <textarea id="inputAyatIsi" class="form-control form-control-pelitaku" rows="3" required></textarea>
-                                </div>
                                 <div class="row">
                                     <div class="col-6 mb-3">
-                                        <label class="form-label fw-bold">Tanggal Mulai</label>
+                                        <label class="form-label fw-bold">Tanggal Mulai (Senin)</label>
                                         <input type="date" id="inputTanggalMulai" class="form-control form-control-pelitaku" required>
                                     </div>
                                     <div class="col-6 mb-3">
-                                        <label class="form-label fw-bold">Tanggal Selesai</label>
+                                        <label class="form-label fw-bold">Tanggal Selesai (Minggu)</label>
                                         <input type="date" id="inputTanggalSelesai" class="form-control form-control-pelitaku" required>
                                     </div>
                                 </div>
-                                <div id="pesanStatusJadwal" class="mb-2"></div>
+
+                                <div class="divider-pelitaku"></div>
+                                <h5 class="mb-1">Ayat Renungan Harian</h5>
+                                <p class="teks-lembut mb-3" style="font-size: 0.85rem;">Isi 6 ayat untuk Senin sampai Sabtu. Hari Minggu tidak perlu diisi karena dipakai untuk absensi.</p>
+                                <div id="wadahAyatHarianForm"></div>
+
+                                <div id="pesanStatusJadwal" class="mb-2 mt-2"></div>
                                 <button type="submit" class="btn btn-pelitaku-primer w-100">Simpan Jadwal & Aktifkan</button>
                             </form>
                         </div>
@@ -115,8 +116,51 @@
                 </div>
             </div>
 
+            <!-- TAB BARU: RENUNGAN HARIAN -->
+            <div class="tab-pane fade" id="tab-renungan" role="tabpanel">
+                <div class="kartu-pelitaku">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <h4 class="mb-0">Respons Renungan Murid</h4>
+                        <select id="pilihanHariRenungan" class="form-control form-control-pelitaku" style="max-width: 220px;">
+                            <option value="1">Senin</option>
+                            <option value="2">Selasa</option>
+                            <option value="3">Rabu</option>
+                            <option value="4">Kamis</option>
+                            <option value="5">Jumat</option>
+                            <option value="6">Sabtu</option>
+                        </select>
+                    </div>
+                    <div id="wadahAyatHariTerpilih" class="mb-3 p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
+                        <p class="teks-lembut mb-0">Pilih hari untuk melihat ayat & renungan murid.</p>
+                    </div>
+                    <div id="wadahRenunganHarian">
+                        <p class="teks-lembut">Memuat...</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- TAB 3: BUAT KUIS -->
             <div class="tab-pane fade" id="tab-kuis" role="tabpanel">
+                <div class="kartu-pelitaku mb-4">
+                    <h4 class="mb-3">Daftar Kuis</h4>
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Judul</th>
+                                    <th>Waktu Mulai</th>
+                                    <th>Waktu Selesai</th>
+                                    <th>Status</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelDaftarKuis">
+                                <tr><td colspan="5" class="text-center teks-lembut">Memuat data kuis...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="kartu-pelitaku">
                     <h4 class="mb-3">Buat Kuis Mingguan</h4>
                     <form id="formKuisBaru">
@@ -148,6 +192,21 @@
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- MODAL DETAIL SOAL KUIS -->
+    <div class="modal fade" id="modalDetailKuis" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content" style="border-radius: var(--radius-sedang); border: none;">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="judulModalDetailKuis">Detail Kuis</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="isiModalDetailKuis">
+                    <p class="teks-lembut">Memuat soal...</p>
+                </div>
+            </div>
         </div>
     </div>
 

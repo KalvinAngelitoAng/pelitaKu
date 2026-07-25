@@ -1,6 +1,9 @@
 -- =====================================================================
 -- PELITAKU - SKEMA DATABASE SUPABASE (POSTGRESQL)
--- Jalankan seluruh script ini di Supabase SQL Editor secara berurutan.
+-- VERSI 2 - untuk INSTALASI BARU (project Supabase yang benar-benar kosong).
+--
+-- Kalau project Supabase kamu SUDAH berjalan (sudah ada data murid, jadwal,
+-- dll), JANGAN jalankan file ini. Jalankan database/migration_v2.sql saja.
 -- =====================================================================
 
 -- Ekstensi untuk membuat UUID otomatis
@@ -23,14 +26,12 @@ create table public.profil (
 comment on table public.profil is 'Data profil setiap pengguna (murid & guru), 1 baris = 1 akun auth.users';
 
 -- =====================================================================
--- 2. TABEL JADWAL MINGGUAN (PIN Absensi & Ayat Renungan)
+-- 2. TABEL JADWAL MINGGUAN (PIN Absensi hari Minggu)
 -- =====================================================================
 create table public.jadwal_mingguan (
     id uuid primary key default gen_random_uuid(),
-    minggu_ke text not null, -- contoh: 'Minggu 1 - Juli 2026'
+    minggu_ke text not null, -- contoh: 'Minggu 1 - Agustus 2026'
     pin_absensi text not null,
-    ayat_referensi text not null, -- contoh: 'Yohanes 3:16'
-    ayat_isi text not null,
     tanggal_mulai date not null,
     tanggal_selesai date not null,
     status_aktif boolean not null default true,
@@ -38,10 +39,25 @@ create table public.jadwal_mingguan (
     created_at timestamptz not null default now()
 );
 
-comment on table public.jadwal_mingguan is 'Pengaturan mingguan: PIN absensi & ayat renungan harian, dibuat oleh guru';
+comment on table public.jadwal_mingguan is 'Pengaturan mingguan: PIN absensi hari Minggu, dibuat oleh guru. Ayat harian ada di tabel ayat_harian.';
 
 -- =====================================================================
--- 3. TABEL KEHADIRAN
+-- 3. TABEL AYAT HARIAN (Senin-Sabtu, 6 ayat per jadwal minggu)
+-- =====================================================================
+create table public.ayat_harian (
+    id uuid primary key default gen_random_uuid(),
+    jadwal_id uuid not null references public.jadwal_mingguan (id) on delete cascade,
+    hari smallint not null check (hari between 1 and 6), -- 1=Senin, 2=Selasa, 3=Rabu, 4=Kamis, 5=Jumat, 6=Sabtu
+    ayat_referensi text not null,
+    ayat_isi text not null,
+    created_at timestamptz not null default now(),
+    unique (jadwal_id, hari)
+);
+
+comment on table public.ayat_harian is 'Ayat renungan per hari (Senin-Sabtu) untuk satu minggu jadwal. Absensi tetap di hari Minggu.';
+
+-- =====================================================================
+-- 4. TABEL KEHADIRAN
 -- =====================================================================
 create table public.kehadiran (
     id uuid primary key default gen_random_uuid(),
@@ -53,24 +69,25 @@ create table public.kehadiran (
     unique (murid_id, jadwal_id)
 );
 
-comment on table public.kehadiran is 'Rekap absensi murid per minggu, satu murid hanya bisa absen sekali per minggu';
+comment on table public.kehadiran is 'Rekap absensi murid per minggu (hari Minggu), satu murid hanya bisa absen sekali per minggu';
 
 -- =====================================================================
--- 4. TABEL RENUNGAN
+-- 5. TABEL RENUNGAN (per hari, terkait ke ayat_harian)
 -- =====================================================================
 create table public.renungan (
     id uuid primary key default gen_random_uuid(),
     murid_id uuid not null references public.profil (id) on delete cascade,
     jadwal_id uuid not null references public.jadwal_mingguan (id) on delete cascade,
+    ayat_harian_id uuid not null references public.ayat_harian (id) on delete cascade,
     isi_renungan text not null,
     created_at timestamptz not null default now(),
-    unique (murid_id, jadwal_id)
+    unique (murid_id, ayat_harian_id)
 );
 
-comment on table public.renungan is 'Isian renungan Alkitab murid, satu kali isi per minggu';
+comment on table public.renungan is 'Isian renungan Alkitab murid, satu kali isi per hari (Senin-Sabtu)';
 
 -- =====================================================================
--- 5. TABEL KUIS
+-- 6. TABEL KUIS
 -- =====================================================================
 create table public.kuis (
     id uuid primary key default gen_random_uuid(),
@@ -85,7 +102,7 @@ create table public.kuis (
 comment on table public.kuis is 'Kuis mingguan yang dibuat guru, punya rentang waktu buka-tutup';
 
 -- =====================================================================
--- 6. TABEL SOAL KUIS (berisi kunci jawaban - TIDAK BOLEH terekspos ke murid)
+-- 7. TABEL SOAL KUIS (berisi kunci jawaban - TIDAK BOLEH terekspos ke murid)
 -- =====================================================================
 create table public.soal_kuis (
     id uuid primary key default gen_random_uuid(),
@@ -102,13 +119,13 @@ create table public.soal_kuis (
 comment on table public.soal_kuis is 'Daftar soal pilihan ganda, kolom kunci_jawaban hanya boleh diakses guru & fungsi RPC';
 
 -- =====================================================================
--- 7. TABEL JAWABAN KUIS (hasil pengerjaan & skor akhir)
+-- 8. TABEL JAWABAN KUIS (hasil pengerjaan & skor akhir)
 -- =====================================================================
 create table public.jawaban_kuis (
     id uuid primary key default gen_random_uuid(),
     murid_id uuid not null references public.profil (id) on delete cascade,
     kuis_id uuid not null references public.kuis (id) on delete cascade,
-    jawaban_json jsonb not null, -- contoh: {"soal_id_1": "a", "soal_id_2": "c"}
+    jawaban_json jsonb not null, -- contoh: [{"soal_id": "uuid", "jawaban": "a"}]
     skor integer not null default 0,
     dikerjakan_pada timestamptz not null default now(),
     unique (murid_id, kuis_id)
@@ -117,7 +134,7 @@ create table public.jawaban_kuis (
 comment on table public.jawaban_kuis is 'Hasil akhir pengerjaan kuis murid, skor dihitung di backend (RPC), bukan di frontend';
 
 -- =====================================================================
--- 8. TABEL REWARD CLAIMS (klaim Susu Gratis)
+-- 9. TABEL REWARD CLAIMS (klaim Susu Gratis)
 -- =====================================================================
 create table public.reward_claims (
     id uuid primary key default gen_random_uuid(),
@@ -131,7 +148,6 @@ comment on table public.reward_claims is 'Riwayat klaim reward berdasarkan penca
 
 -- =====================================================================
 -- FUNGSI BANTUAN: CEK APAKAH PENGGUNA SEDANG LOGIN ADALAH GURU
--- (SECURITY DEFINER agar tidak menyebabkan rekursi RLS pada tabel profil)
 -- =====================================================================
 create or replace function public.is_guru()
 returns boolean
@@ -151,6 +167,7 @@ $$;
 -- =====================================================================
 alter table public.profil enable row level security;
 alter table public.jadwal_mingguan enable row level security;
+alter table public.ayat_harian enable row level security;
 alter table public.kehadiran enable row level security;
 alter table public.renungan enable row level security;
 alter table public.kuis enable row level security;
@@ -160,7 +177,6 @@ alter table public.reward_claims enable row level security;
 
 -- =====================================================================
 -- POLICY: PROFIL
--- Murid hanya bisa lihat profil sendiri, guru bisa lihat semua profil
 -- =====================================================================
 create policy "profil_select_sendiri_atau_guru"
 on public.profil for select
@@ -178,31 +194,43 @@ with check ( public.is_guru() );
 
 -- =====================================================================
 -- POLICY: JADWAL MINGGUAN
--- Hanya guru yang boleh akses tabel asli secara langsung (termasuk PIN).
--- Murid mengakses lewat VIEW "jadwal_publik" di bawah (tanpa kolom PIN).
+-- Hanya guru yang boleh akses tabel asli (termasuk PIN).
+-- Murid mengakses lewat VIEW "jadwal_publik" (tanpa kolom PIN).
 -- =====================================================================
 create policy "jadwal_hanya_guru"
 on public.jadwal_mingguan for all
 using ( public.is_guru() )
 with check ( public.is_guru() );
 
--- View aman untuk murid: TIDAK menampilkan kolom pin_absensi
 create view public.jadwal_publik
 with (security_invoker = false) as
-select
-    id, minggu_ke, ayat_referensi, ayat_isi,
-    tanggal_mulai, tanggal_selesai, status_aktif, created_at
+select id, minggu_ke, tanggal_mulai, tanggal_selesai, status_aktif, created_at
 from public.jadwal_mingguan
 where status_aktif = true;
 
 grant select on public.jadwal_publik to authenticated;
 
 -- =====================================================================
+-- POLICY: AYAT HARIAN
+-- Hanya guru yang boleh akses tabel asli.
+-- Murid mengakses lewat VIEW "ayat_harian_publik" (hanya jadwal aktif).
+-- =====================================================================
+create policy "ayat_harian_hanya_guru"
+on public.ayat_harian for all
+using ( public.is_guru() )
+with check ( public.is_guru() );
+
+create view public.ayat_harian_publik
+with (security_invoker = false) as
+select ah.id, ah.jadwal_id, ah.hari, ah.ayat_referensi, ah.ayat_isi
+from public.ayat_harian ah
+join public.jadwal_mingguan jm on jm.id = ah.jadwal_id
+where jm.status_aktif = true;
+
+grant select on public.ayat_harian_publik to authenticated;
+
+-- =====================================================================
 -- POLICY: KEHADIRAN
--- Murid boleh insert/lihat kehadiran miliknya sendiri saja.
--- Guru boleh lihat semua data kehadiran.
--- (Insert normal murid TETAP dipakai untuk fitur "Izin",
---  sedangkan absen "Hadir" WAJIB lewat RPC catat_kehadiran agar PIN tervalidasi)
 -- =====================================================================
 create policy "kehadiran_select_sendiri_atau_guru"
 on public.kehadiran for select
@@ -214,19 +242,17 @@ with check ( murid_id = auth.uid() and status = 'izin' );
 
 -- =====================================================================
 -- POLICY: RENUNGAN
--- Murid lihat & insert milik sendiri, guru boleh lihat semua renungan murid
+-- Insert langsung TIDAK diizinkan; wajib lewat RPC submit_renungan
+-- agar validasi minimal 50 karakter & pemberian poin konsisten di server.
 -- =====================================================================
 create policy "renungan_select_sendiri_atau_guru"
 on public.renungan for select
 using ( murid_id = auth.uid() or public.is_guru() );
 
--- Insert renungan langsung TIDAK diizinkan; wajib lewat RPC submit_renungan
--- agar validasi minimal 50 karakter & pemberian poin konsisten di server.
-
 -- =====================================================================
 -- POLICY: KUIS
--- Murid boleh lihat kuis yang jadwalnya masih dalam rentang waktu aktif
--- Guru boleh kelola semua kuis
+-- Murid boleh lihat kuis yang jadwalnya masih dalam rentang waktu aktif.
+-- Guru boleh kelola & lihat SEMUA kuis kapan saja (agar bisa cek ulang).
 -- =====================================================================
 create policy "kuis_select_aktif_atau_guru"
 on public.kuis for select
@@ -240,10 +266,22 @@ on public.kuis for all
 using ( public.is_guru() )
 with check ( public.is_guru() );
 
+-- View status kuis untuk murid: hanya info judul & waktu (BUKAN soal/kunci),
+-- supaya murid tahu status "Akan Datang / Aktif / Berakhir" walau di luar jendela waktu.
+create view public.kuis_status_publik
+with (security_invoker = false) as
+select k.id, k.judul, k.waktu_mulai, k.waktu_selesai, k.jadwal_id
+from public.kuis k
+join public.jadwal_mingguan jm on jm.id = k.jadwal_id
+where jm.status_aktif = true;
+
+grant select on public.kuis_status_publik to authenticated;
+
 -- =====================================================================
 -- POLICY: SOAL KUIS
 -- Tabel asli (dengan kunci_jawaban) HANYA bisa diakses guru.
--- Murid mengakses lewat VIEW "soal_kuis_publik" (tanpa kunci_jawaban).
+-- Murid mengakses lewat VIEW "soal_kuis_publik" (tanpa kunci_jawaban),
+-- hanya saat jendela waktu kuis sedang aktif.
 -- =====================================================================
 create policy "soal_kuis_hanya_guru"
 on public.soal_kuis for all
@@ -263,8 +301,6 @@ grant select on public.soal_kuis_publik to authenticated;
 
 -- =====================================================================
 -- POLICY: JAWABAN KUIS
--- Murid hanya bisa lihat jawaban miliknya sendiri (insert lewat RPC saja)
--- Guru boleh lihat semua hasil kuis
 -- =====================================================================
 create policy "jawaban_kuis_select_sendiri_atau_guru"
 on public.jawaban_kuis for select
@@ -272,7 +308,6 @@ using ( murid_id = auth.uid() or public.is_guru() );
 
 -- =====================================================================
 -- POLICY: REWARD CLAIMS
--- Murid lihat klaim miliknya, guru lihat semua (insert lewat RPC saja)
 -- =====================================================================
 create policy "reward_claims_select_sendiri_atau_guru"
 on public.reward_claims for select
@@ -322,10 +357,10 @@ end;
 $$;
 
 -- =====================================================================
--- RPC 2: SUBMIT RENUNGAN (validasi panjang teks & pemberian poin di server)
+-- RPC 2: SUBMIT RENUNGAN PER HARI (validasi panjang teks & poin di server)
 -- =====================================================================
 create or replace function public.submit_renungan(
-    p_jadwal_id uuid,
+    p_ayat_harian_id uuid,
     p_isi_renungan text
 )
 returns json
@@ -334,22 +369,31 @@ security definer
 set search_path = public
 as $$
 declare
+    v_jadwal_id uuid;
     v_sudah_ada integer;
 begin
     if length(trim(p_isi_renungan)) < 50 then
         return json_build_object('sukses', false, 'pesan', 'Renungan minimal harus 50 karakter.');
     end if;
 
-    select count(*) into v_sudah_ada
-    from public.renungan
-    where murid_id = auth.uid() and jadwal_id = p_jadwal_id;
+    select jadwal_id into v_jadwal_id
+    from public.ayat_harian
+    where id = p_ayat_harian_id;
 
-    if v_sudah_ada > 0 then
-        return json_build_object('sukses', false, 'pesan', 'Renungan minggu ini sudah pernah diisi.');
+    if v_jadwal_id is null then
+        return json_build_object('sukses', false, 'pesan', 'Ayat harian tidak ditemukan.');
     end if;
 
-    insert into public.renungan (murid_id, jadwal_id, isi_renungan)
-    values (auth.uid(), p_jadwal_id, trim(p_isi_renungan));
+    select count(*) into v_sudah_ada
+    from public.renungan
+    where murid_id = auth.uid() and ayat_harian_id = p_ayat_harian_id;
+
+    if v_sudah_ada > 0 then
+        return json_build_object('sukses', false, 'pesan', 'Renungan untuk hari ini sudah pernah diisi.');
+    end if;
+
+    insert into public.renungan (murid_id, jadwal_id, ayat_harian_id, isi_renungan)
+    values (auth.uid(), v_jadwal_id, p_ayat_harian_id, trim(p_isi_renungan));
 
     update public.profil
     set total_poin = total_poin + 1,
