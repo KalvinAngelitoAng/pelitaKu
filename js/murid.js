@@ -2,7 +2,7 @@
 // PELITAKU - LOGIKA DASHBOARD MURID
 // =====================================================================
 
-const KELIPATAN_POIN_REWARD = 20; // 1 level Susu Gratis = 20 poin (setara 2 minggu: 6 renungan + 4 kuis per minggu)
+const KELIPATAN_POIN_REWARD = 22; // 1 level Susu Gratis = 22 poin (setara 2 minggu: 6 renungan + 5 kuis per minggu)
 
 let profilMurid = null;
 let jadwalAktif = null;
