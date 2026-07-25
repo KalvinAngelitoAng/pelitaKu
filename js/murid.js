@@ -1,8 +1,8 @@
 // =====================================================================
-// LOGIKA DASHBOARD MURID
+// PELITAKU - LOGIKA DASHBOARD MURID
 // =====================================================================
 
-const TARGET_POIN_REWARD = [50, 100, 150, 200]; // level target Susu Gratis
+const KELIPATAN_POIN_REWARD = 20; // 1 level Susu Gratis = 20 poin (setara 2 minggu: 6 renungan + 4 kuis per minggu)
 
 let profilMurid = null;
 let jadwalAktif = null;
@@ -63,31 +63,20 @@ async function muatReward(poinSaatIni) {
         .select("target_poin")
         .eq("murid_id", profilMurid.id);
 
-    const targetSudahDiklaim = new Set((klaimData || []).map((baris) => baris.target_poin));
+    const jumlahSudahDiklaim = (klaimData || []).length;
 
-    // Cari target berikutnya yang belum diklaim
-    let targetBerikutnya = TARGET_POIN_REWARD.find((target) => !targetSudahDiklaim.has(target));
+    // Target berikutnya selalu kelipatan 20 berikutnya yang belum diklaim.
+    // Contoh: belum pernah klaim -> target 20. Sudah klaim 1x -> target 40. Dst, tanpa batas atas.
+    const targetBerikutnya = (jumlahSudahDiklaim + 1) * KELIPATAN_POIN_REWARD;
 
     const barProgres = document.getElementById("barProgresPoin");
     const teksTarget = document.getElementById("teksTargetPoin");
     const isiSusu = document.getElementById("isiSusu");
     const tombolKlaim = document.getElementById("tombolKlaimSusu");
 
-    if (!targetBerikutnya) {
-        // Semua level sudah diklaim
-        barProgres.style.width = "100%";
-        teksTarget.textContent = "Semua level Susu Gratis sudah kamu klaim. Hebat!";
-        isiSusu.setAttribute("y", 26);
-        isiSusu.setAttribute("height", 74);
-        tombolKlaim.className = "btn btn-pelitaku-nonaktif";
-        tombolKlaim.disabled = true;
-        tombolKlaim.textContent = "Sudah Diklaim";
-        return;
-    }
-
     const persentase = Math.min(100, Math.round((poinSaatIni / targetBerikutnya) * 100));
     barProgres.style.width = `${persentase}%`;
-    teksTarget.textContent = `${poinSaatIni} / ${targetBerikutnya} poin menuju Susu Gratis berikutnya`;
+    teksTarget.textContent = `${poinSaatIni} / ${targetBerikutnya} poin menuju Susu Gratis level ${jumlahSudahDiklaim + 1}`;
 
     const tinggiIsi = (persentase / 100) * 74;
     isiSusu.setAttribute("y", 100 - tinggiIsi);
