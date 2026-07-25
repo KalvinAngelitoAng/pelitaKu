@@ -1,5 +1,5 @@
 // =====================================================================
-// LOGIKA DASHBOARD GURU
+// PELITAKU - LOGIKA DASHBOARD GURU
 // =====================================================================
 
 let profilGuru = null;
@@ -385,17 +385,17 @@ async function bukaDetailSoalKuis(kuisId, judulKuis) {
 // =====================================================================
 function tambahBarisSoal() {
     hitungSoalKuisBaru += 1;
-    const indeksSoal = hitungSoalKuisBaru;
+    const idUnikSoal = hitungSoalKuisBaru; // hanya dipakai sebagai ID DOM, bukan nomor tampilan
 
     const div = document.createElement("div");
     div.className = "mb-3 p-3";
     div.style.cssText = "background-color: var(--warna-krem); border-radius: var(--radius-kecil);";
-    div.id = `barisSoal_${indeksSoal}`;
+    div.id = `barisSoal_${idUnikSoal}`;
 
     div.innerHTML = `
         <div class="d-flex justify-content-between mb-2">
-            <b>Soal ${indeksSoal}</b>
-            <button type="button" class="btn btn-sm btn-pelitaku-outline" onclick="hapusBarisSoal(${indeksSoal})">Hapus</button>
+            <b class="label-nomor-soal">Soal</b>
+            <button type="button" class="btn btn-sm btn-pelitaku-outline" onclick="hapusBarisSoal(${idUnikSoal})">Hapus</button>
         </div>
         <div class="mb-2">
             <input type="text" class="form-control form-control-pelitaku input-pertanyaan-soal" placeholder="Tulis pertanyaan..." required>
@@ -414,7 +414,7 @@ function tambahBarisSoal() {
             <label class="form-label mb-1" style="font-size: 0.85rem;">Kunci Jawaban Benar</label><br>
             ${["a", "b", "c", "d"].map((opsi) => `
                 <div class="form-check form-check-inline">
-                    <input class="form-check-input input-kunci-jawaban" type="radio" name="kunci_soal_${indeksSoal}" value="${opsi}" required>
+                    <input class="form-check-input input-kunci-jawaban" type="radio" name="kunci_soal_${idUnikSoal}" value="${opsi}" required>
                     <label class="form-check-label">${opsi.toUpperCase()}</label>
                 </div>
             `).join("")}
@@ -422,11 +422,25 @@ function tambahBarisSoal() {
     `;
 
     document.getElementById("wadahDaftarSoalForm").appendChild(div);
+    perbaruiNomorSoalTampilan();
 }
 
-function hapusBarisSoal(indeksSoal) {
-    const elemen = document.getElementById(`barisSoal_${indeksSoal}`);
+function hapusBarisSoal(idUnikSoal) {
+    const elemen = document.getElementById(`barisSoal_${idUnikSoal}`);
     if (elemen) elemen.remove();
+    perbaruiNomorSoalTampilan();
+}
+
+/**
+ * Menghitung ulang label "Soal 1", "Soal 2", dst berdasarkan urutan tampil
+ * saat ini di layar -- bukan dari ID internal yang terus bertambah.
+ * Dipanggil setiap kali ada baris soal ditambah atau dihapus.
+ */
+function perbaruiNomorSoalTampilan() {
+    const semuaLabel = document.querySelectorAll("#wadahDaftarSoalForm .label-nomor-soal");
+    semuaLabel.forEach((label, indeks) => {
+        label.textContent = `Soal ${indeks + 1}`;
+    });
 }
 
 async function tanganiSimpanKuisBaru(peristiwa) {
