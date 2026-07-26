@@ -2,7 +2,7 @@
 // PELITAKU - LOGIKA DASHBOARD MURID
 // =====================================================================
 
-const KELIPATAN_POIN_REWARD = 22; // 1 level Susu Gratis = 22 poin (setara 2 minggu: 6 renungan + 5 kuis per minggu)
+const KELIPATAN_POIN_REWARD = 20; // 1 level Susu Gratis = 20 poin (setara 2 minggu: 6 renungan + 4 kuis per minggu)
 
 let profilMurid = null;
 let jadwalAktif = null;
@@ -97,21 +97,27 @@ async function muatReward(poinSaatIni) {
 async function tanganiKlaimSusu() {
     const tombol = document.getElementById("tombolKlaimSusu");
     const target = parseInt(tombol.dataset.target, 10);
-    const pesanEl = document.getElementById("pesanKlaimSusu");
 
     tombol.disabled = true;
     tombol.textContent = "Memproses...";
 
     const { data, error } = await klienSupabase.rpc("klaim_reward", { p_target_poin: target });
 
-    if (error || !data.sukses) {
-        pesanEl.innerHTML = `<p class="pesan-error mb-0">${(data && data.pesan) || "Gagal klaim reward."}</p>`;
+    if (error) {
+        tampilkanToast(pesanRamahDariError(error), "error");
         tombol.disabled = false;
         tombol.textContent = "Claim Susu";
         return;
     }
 
-    pesanEl.innerHTML = `<p class="pesan-sukses mb-0">${data.pesan}</p>`;
+    if (!data.sukses) {
+        tampilkanToast(data.pesan || "Gagal klaim reward.", "error");
+        tombol.disabled = false;
+        tombol.textContent = "Claim Susu";
+        return;
+    }
+
+    tampilkanToast(data.pesan, "sukses");
     await muatReward(profilMurid.total_poin);
 }
 
@@ -170,11 +176,10 @@ async function muatStatusAbsensi() {
 
 async function tanganiAbsenHadir() {
     const pin = document.getElementById("inputPinAbsen").value.trim();
-    const pesanEl = document.getElementById("pesanStatusAbsen");
 
     if (!jadwalAktif) return;
     if (!pin) {
-        pesanEl.innerHTML = `<p class="pesan-error mb-0">Masukkan PIN terlebih dahulu.</p>`;
+        tampilkanToast("Masukkan PIN terlebih dahulu.", "error");
         return;
     }
 
@@ -183,23 +188,27 @@ async function tanganiAbsenHadir() {
         p_pin: pin
     });
 
-    if (error || !data.sukses) {
-        pesanEl.innerHTML = `<p class="pesan-error mb-0">${(data && data.pesan) || "Terjadi kesalahan."}</p>`;
+    if (error) {
+        tampilkanToast(pesanRamahDariError(error), "error");
         return;
     }
 
-    pesanEl.innerHTML = `<p class="pesan-sukses mb-0">${data.pesan}</p>`;
+    if (!data.sukses) {
+        tampilkanToast(data.pesan || "Terjadi kesalahan.", "error");
+        return;
+    }
+
+    tampilkanToast(data.pesan, "sukses");
     await muatStatusAbsensi();
     await muatKuis();
 }
 
 async function tanganiKirimIzin() {
     const alasan = document.getElementById("inputAlasanIzin").value.trim();
-    const pesanEl = document.getElementById("pesanStatusAbsen");
 
     if (!jadwalAktif) return;
     if (!alasan) {
-        pesanEl.innerHTML = `<p class="pesan-error mb-0">Alasan izin wajib diisi.</p>`;
+        tampilkanToast("Alasan izin wajib diisi.", "error");
         return;
     }
 
@@ -211,11 +220,11 @@ async function tanganiKirimIzin() {
     });
 
     if (error) {
-        pesanEl.innerHTML = `<p class="pesan-error mb-0">Gagal mengirim izin. Kamu mungkin sudah absen minggu ini.</p>`;
+        tampilkanToast("Gagal mengirim izin. Kamu mungkin sudah absen minggu ini.", "error");
         return;
     }
 
-    pesanEl.innerHTML = `<p class="pesan-sukses mb-0">Izin berhasil dicatat.</p>`;
+    tampilkanToast("Izin berhasil dicatat.", "sukses");
     await muatStatusAbsensi();
     await muatKuis();
 }
@@ -248,6 +257,8 @@ async function muatAyatDanRenunganHarian() {
     const wadahAyat = document.getElementById("wadahAyatRenungan");
     const wadahForm = document.getElementById("wadahFormRenungan");
     const wadahPelacak = document.getElementById("wadahPelacakMingguan");
+
+    wadahAyat.innerHTML = skeletonHtml(2);
 
     if (!jadwalAktif) {
         wadahAyat.innerHTML = `<p class="teks-lembut mb-0">Belum ada jadwal minggu ini.</p>`;
@@ -326,7 +337,6 @@ async function muatAyatDanRenunganHarian() {
                 placeholder="Tuliskan renungan kamu tentang ayat di atas (minimal 50 karakter)..."></textarea>
             <p class="teks-lembut mb-2 mt-1" id="teksJumlahKarakter" style="font-size: 0.85rem;">0 / 50 karakter minimal</p>
             <button class="btn btn-pelitaku-primer" id="tombolKirimRenungan" disabled>Kirim Renungan</button>
-            <div id="pesanStatusRenungan" class="mt-3"></div>
         `;
         document.getElementById("inputRenungan").addEventListener("input", perbaruiJumlahKarakterRenungan);
         document.getElementById("tombolKirimRenungan").addEventListener("click", tanganiKirimRenungan);
@@ -335,11 +345,10 @@ async function muatAyatDanRenunganHarian() {
 
 async function tanganiKirimRenungan() {
     const isi = document.getElementById("inputRenungan").value.trim();
-    const pesanEl = document.getElementById("pesanStatusRenungan");
 
     if (!ayatHarianAktif) return;
     if (isi.length < 50) {
-        pesanEl.innerHTML = `<p class="pesan-error mb-0">Renungan minimal 50 karakter.</p>`;
+        tampilkanToast("Renungan minimal 50 karakter.", "error");
         return;
     }
 
@@ -352,13 +361,21 @@ async function tanganiKirimRenungan() {
         p_isi_renungan: isi
     });
 
-    if (error || !data.sukses) {
-        pesanEl.innerHTML = `<p class="pesan-error mb-0">${(data && data.pesan) || "Gagal mengirim renungan."}</p>`;
+    if (error) {
+        tampilkanToast(pesanRamahDariError(error), "error");
         tombol.disabled = false;
         tombol.textContent = "Kirim Renungan";
         return;
     }
 
+    if (!data.sukses) {
+        tampilkanToast(data.pesan || "Gagal mengirim renungan.", "error");
+        tombol.disabled = false;
+        tombol.textContent = "Kirim Renungan";
+        return;
+    }
+
+    tampilkanToast(data.pesan, "sukses");
     profilMurid.total_poin += 1;
     perbaruiTampilanPoin();
     await muatAyatDanRenunganHarian();
@@ -380,6 +397,8 @@ async function muatKuis() {
         tampilkanKuncianKuis("Kamu harus absen Hadir atau Izin terlebih dahulu sebelum bisa mengerjakan kuis.");
         return;
     }
+
+    document.getElementById("wadahKuis").innerHTML = skeletonHtml(3);
 
     // Ambil status kuis (judul & waktu) dari view publik, terlepas dari jendela waktu,
     // supaya murid tahu persis kenapa kuis belum/tidak bisa dikerjakan.
@@ -496,7 +515,6 @@ function renderFormKuis() {
 
     htmlSoal += `
             <button type="submit" class="btn btn-pelitaku-primer">Kumpulkan Kuis</button>
-            <div id="pesanStatusKuis" class="mt-3"></div>
         </form>
     `;
 
@@ -518,10 +536,9 @@ async function tanganiSubmitKuis(peristiwa) {
     peristiwa.preventDefault();
 
     const progres = ambilProgresLocalStorage();
-    const pesanEl = document.getElementById("pesanStatusKuis");
 
     if (Object.keys(progres).length < daftarSoalKuis.length) {
-        pesanEl.innerHTML = `<p class="pesan-error mb-0">Jawab semua soal terlebih dahulu.</p>`;
+        tampilkanToast("Jawab semua soal terlebih dahulu.", "error");
         return;
     }
 
@@ -539,8 +556,15 @@ async function tanganiSubmitKuis(peristiwa) {
         p_jawaban: jawabanArray
     });
 
-    if (error || !data.sukses) {
-        pesanEl.innerHTML = `<p class="pesan-error mb-0">${(data && data.pesan) || "Gagal mengumpulkan kuis."}</p>`;
+    if (error) {
+        tampilkanToast(pesanRamahDariError(error), "error");
+        tombolSubmit.disabled = false;
+        tombolSubmit.textContent = "Kumpulkan Kuis";
+        return;
+    }
+
+    if (!data.sukses) {
+        tampilkanToast(data.pesan || "Gagal mengumpulkan kuis.", "error");
         tombolSubmit.disabled = false;
         tombolSubmit.textContent = "Kumpulkan Kuis";
         return;
@@ -549,6 +573,7 @@ async function tanganiSubmitKuis(peristiwa) {
     hapusProgresLocalStorage();
     profilMurid.total_poin += data.skor;
     perbaruiTampilanPoin();
+    tampilkanToast(`Kuis berhasil dikumpulkan! Skor kamu: ${data.skor} / ${data.total_soal}`, "sukses");
 
     document.getElementById("wadahKuis").innerHTML = `
         <p class="pesan-sukses mb-0">Kuis berhasil dikumpulkan. Skor kamu: ${data.skor} / ${data.total_soal}</p>

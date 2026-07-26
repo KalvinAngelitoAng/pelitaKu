@@ -1,5 +1,6 @@
 /* =====================================================================
    PELITAKU - STYLESHEET UTAMA
+   Tema: ceria, ramah anak, rounded corners besar, warna cerah lembut
    ===================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:ital,wght@0,400;0,600;0,700;0,800;1,600&display=swap');
@@ -87,15 +88,6 @@ h1, h2, h3, h4, .font-judul {
     gap: 10px;
     margin-bottom: 8px;
 }
-
-.lentera {
-    width: 92px;
-    height: 92px;
-    margin: 0 auto 14px;
-    position: relative;
-    z-index: 2;
-}
-
 
 .judul-aplikasi {
     font-size: 2rem;
@@ -317,4 +309,56 @@ h1, h2, h3, h4, .font-judul {
     .judul-aplikasi {
         font-size: 1.6rem;
     }
+}
+
+/* =========================== TOAST NOTIFICATION =========================== */
+.toast-pelitaku {
+    border-radius: var(--radius-sedang);
+    border: none;
+    box-shadow: var(--bayangan-lembut);
+    font-family: 'Nunito', sans-serif;
+    font-weight: 700;
+    color: var(--warna-putih);
+    min-width: 260px;
+}
+
+.toast-pelitaku .toast-body {
+    padding: 14px 8px;
+}
+
+.toast-pelitaku-sukses {
+    background-color: var(--warna-hijau-mint);
+}
+
+.toast-pelitaku-error {
+    background-color: var(--warna-koral);
+}
+
+/* =========================== LOADING SKELETON =========================== */
+@keyframes kilauSkeleton {
+    0% { background-position: -200px 0; }
+    100% { background-position: calc(200px + 100%) 0; }
+}
+
+.skeleton {
+    display: block;
+    height: 14px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--warna-abu-nonaktif) 25%, #F1F1F1 37%, var(--warna-abu-nonaktif) 63%);
+    background-size: 400px 100%;
+    animation: kilauSkeleton 1.4s ease-in-out infinite;
+}
+
+.skeleton-baris {
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+.skeleton-baris:last-child {
+    width: 65%;
+    margin-bottom: 0;
+}
+
+.skeleton-bulat {
+    border-radius: 50%;
 }

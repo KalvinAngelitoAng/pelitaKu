@@ -1,5 +1,5 @@
 // =====================================================================
-// FUNGSI BERSAMA
+// PELITAKU - FUNGSI BERSAMA
 // Dipakai di dashboard-murid.html dan dashboard-guru.html
 // =====================================================================
 
@@ -97,3 +97,110 @@ function tentukanStatusKuis(waktuMulai, waktuSelesai) {
     if (sekarang > selesai) return "berakhir";
     return "aktif";
 }
+
+// =====================================================================
+// TOAST NOTIFICATION
+// =====================================================================
+
+/**
+ * Menampilkan notifikasi popup di pojok kanan bawah layar.
+ * Dipakai untuk semua pesan sukses/error yang sifatnya sementara
+ * (bukan status permanen seperti "sudah dikumpulkan" yang harus tetap terlihat).
+ * @param {string} pesan - Teks yang ditampilkan.
+ * @param {"sukses"|"error"} tipe - Menentukan warna toast.
+ */
+function tampilkanToast(pesan, tipe = "sukses") {
+    let wadah = document.getElementById("wadahToastPelitaku");
+
+    if (!wadah) {
+        wadah = document.createElement("div");
+        wadah.id = "wadahToastPelitaku";
+        wadah.className = "toast-container position-fixed bottom-0 end-0 p-3";
+        wadah.style.zIndex = "1080";
+        document.body.appendChild(wadah);
+    }
+
+    const idToast = "toast-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+    const kelasWarna = tipe === "error" ? "toast-pelitaku-error" : "toast-pelitaku-sukses";
+
+    const elemenToast = document.createElement("div");
+    elemenToast.id = idToast;
+    elemenToast.className = `toast toast-pelitaku ${kelasWarna}`;
+    elemenToast.setAttribute("role", "alert");
+    elemenToast.setAttribute("aria-live", "assertive");
+    elemenToast.setAttribute("aria-atomic", "true");
+    elemenToast.innerHTML = `
+        <div class="d-flex align-items-center">
+            <div class="toast-body">${pesan}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Tutup"></button>
+        </div>
+    `;
+    wadah.appendChild(elemenToast);
+
+    const instansiToast = new bootstrap.Toast(elemenToast, { delay: 4500 });
+    instansiToast.show();
+
+    elemenToast.addEventListener("hidden.bs.toast", () => elemenToast.remove());
+}
+
+// =====================================================================
+// LOADING SKELETON
+// =====================================================================
+
+/**
+ * Menghasilkan HTML kotak shimmer sebagai pengganti teks "Memuat..." polos.
+ * @param {number} jumlahBaris - Berapa baris skeleton yang mau ditampilkan.
+ */
+function skeletonHtml(jumlahBaris = 3) {
+    let html = "";
+    for (let i = 0; i < jumlahBaris; i++) {
+        html += `<div class="skeleton skeleton-baris"></div>`;
+    }
+    return html;
+}
+
+/**
+ * Skeleton khusus bentuk baris tabel (dipakai di tabelDaftarMurid / tabelDaftarKuis).
+ * @param {number} jumlahKolom - Jumlah kolom pada tabel.
+ * @param {number} jumlahBaris - Jumlah baris skeleton yang ditampilkan.
+ */
+function skeletonTabelHtml(jumlahKolom, jumlahBaris = 3) {
+    let html = "";
+    for (let b = 0; b < jumlahBaris; b++) {
+        html += "<tr>";
+        for (let k = 0; k < jumlahKolom; k++) {
+            html += `<td><div class="skeleton skeleton-baris"></div></td>`;
+        }
+        html += "</tr>";
+    }
+    return html;
+}
+
+// =====================================================================
+// PENANGANAN ERROR JARINGAN
+// =====================================================================
+
+/**
+ * Mengubah pesan error teknis dari Supabase/browser jadi pesan ramah anak.
+ * Khusus mendeteksi kegagalan karena masalah jaringan/koneksi.
+ */
+function pesanRamahDariError(error) {
+    if (!error) return "Terjadi kesalahan. Coba lagi.";
+    const pesanAsli = (error.message || "").toLowerCase();
+
+    if (pesanAsli.includes("fetch") || pesanAsli.includes("network") || pesanAsli.includes("connection") || !navigator.onLine) {
+        return "Koneksi ke server terputus. Periksa internet kamu lalu coba lagi.";
+    }
+
+    return error.message || "Terjadi kesalahan. Coba lagi.";
+}
+
+// Beri tahu pengguna kalau koneksi internet mereka putus/tersambung lagi,
+// supaya tidak bingung kenapa tombol tiba-tiba tidak merespons.
+window.addEventListener("offline", () => {
+    tampilkanToast("Koneksi internet terputus. Beberapa fitur mungkin tidak berfungsi sampai internet kembali.", "error");
+});
+
+window.addEventListener("online", () => {
+    tampilkanToast("Koneksi internet tersambung kembali.", "sukses");
+});
