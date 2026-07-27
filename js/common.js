@@ -13,16 +13,20 @@ const SVG_FOTO_PROFIL = `
  * Melakukan redirect halaman, TAPI dengan pengaman anti-infinite-loop:
  * kalau dalam tab yang sama sudah beberapa kali mencoba redirect tanpa
  * pernah berhasil "mendarat" dengan benar (misal karena sesi login belum
- * sempat terbaca, atau data role bermasalah), proses dihentikan paksa
- * dan pengguna diberi pesan jelas -- bukan reload berulang tanpa henti.
+ * sempat terbaca, atau data role bermasalah), proses dihentikan paksa --
+ * termasuk BENAR-BENAR logout, supaya index.html tidak langsung
+ * mengarahkan balik ke dashboard dan menyebabkan loop berlanjut.
  */
-function redirectDenganPengamanLoop(tujuan) {
+async function redirectDenganPengamanLoop(tujuan) {
     const kunci = "pelitaku_percobaan_redirect";
     const sudahCoba = parseInt(sessionStorage.getItem(kunci) || "0", 10);
 
     if (sudahCoba >= 2) {
         sessionStorage.removeItem(kunci);
-        alert("Terjadi masalah saat memuat sesi login kamu (halaman terus mencoba reload). Silakan login ulang.");
+        // PENTING: logout sungguhan, bukan cuma redirect -- supaya index.html
+        // tidak mendeteksi sesi masih ada dan langsung mengarahkan balik lagi.
+        await klienSupabase.auth.signOut();
+        alert("Terjadi masalah saat memuat sesi login kamu. Kamu sudah dikeluarkan otomatis, silakan login ulang.");
         window.location.href = "index.html";
         return;
     }
@@ -37,10 +41,20 @@ function redirectDenganPengamanLoop(tujuan) {
  * @param {string} peranWajib - 'murid' atau 'guru', untuk proteksi akses halaman.
  */
 async function pastikanSudahLogin(peranWajib) {
-    const { data: sesiData } = await klienSupabase.auth.getSession();
+    let { data: sesiData } = await klienSupabase.auth.getSession();
+
+    // Jaga-jaga dari race condition: kadang sesi login belum sempat "kebaca"
+    // sepersekian detik setelah baru saja pindah halaman dari index.html.
+    // Coba baca ulang sekali (tunggu 400ms) sebelum benar-benar menyimpulkan
+    // pengguna belum login -- supaya tidak salah redirect gara-gara ini.
+    if (!sesiData.session) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        const hasilUlang = await klienSupabase.auth.getSession();
+        sesiData = hasilUlang.data;
+    }
 
     if (!sesiData.session) {
-        redirectDenganPengamanLoop("index.html");
+        await redirectDenganPengamanLoop("index.html");
         return null;
     }
 
@@ -55,7 +69,7 @@ async function pastikanSudahLogin(peranWajib) {
     if (error || !profil) {
         alert("Data profil tidak ditemukan. Silakan hubungi guru pembina.");
         await klienSupabase.auth.signOut();
-        redirectDenganPengamanLoop("index.html");
+        window.location.href = "index.html";
         return null;
     }
 
@@ -66,7 +80,7 @@ async function pastikanSudahLogin(peranWajib) {
 
     if (roleBersih !== peranWajibBersih) {
         const halamanTujuan = roleBersih === "guru" ? "dashboard-guru.html" : "dashboard-murid.html";
-        redirectDenganPengamanLoop(halamanTujuan);
+        await redirectDenganPengamanLoop(halamanTujuan);
         return null;
     }
 
