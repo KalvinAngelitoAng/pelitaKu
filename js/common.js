@@ -10,6 +10,28 @@ const SVG_FOTO_PROFIL = `
 </svg>`;
 
 /**
+ * Melakukan redirect halaman, TAPI dengan pengaman anti-infinite-loop:
+ * kalau dalam tab yang sama sudah beberapa kali mencoba redirect tanpa
+ * pernah berhasil "mendarat" dengan benar (misal karena sesi login belum
+ * sempat terbaca, atau data role bermasalah), proses dihentikan paksa
+ * dan pengguna diberi pesan jelas -- bukan reload berulang tanpa henti.
+ */
+function redirectDenganPengamanLoop(tujuan) {
+    const kunci = "pelitaku_percobaan_redirect";
+    const sudahCoba = parseInt(sessionStorage.getItem(kunci) || "0", 10);
+
+    if (sudahCoba >= 2) {
+        sessionStorage.removeItem(kunci);
+        alert("Terjadi masalah saat memuat sesi login kamu (halaman terus mencoba reload). Silakan login ulang.");
+        window.location.href = "index.html";
+        return;
+    }
+
+    sessionStorage.setItem(kunci, String(sudahCoba + 1));
+    window.location.href = tujuan;
+}
+
+/**
  * Memastikan pengguna sudah login. Jika belum, arahkan ke halaman login.
  * Mengembalikan objek profil (dari tabel profil) jika berhasil.
  * @param {string} peranWajib - 'murid' atau 'guru', untuk proteksi akses halaman.
@@ -18,7 +40,7 @@ async function pastikanSudahLogin(peranWajib) {
     const { data: sesiData } = await klienSupabase.auth.getSession();
 
     if (!sesiData.session) {
-        window.location.href = "index.html";
+        redirectDenganPengamanLoop("index.html");
         return null;
     }
 
@@ -33,16 +55,24 @@ async function pastikanSudahLogin(peranWajib) {
     if (error || !profil) {
         alert("Data profil tidak ditemukan. Silakan hubungi guru pembina.");
         await klienSupabase.auth.signOut();
-        window.location.href = "index.html";
+        redirectDenganPengamanLoop("index.html");
         return null;
     }
 
-    if (profil.role !== peranWajib) {
-        // Jika role tidak sesuai halaman, arahkan ke dashboard yang benar
-        window.location.href = profil.role === "guru" ? "dashboard-guru.html" : "dashboard-murid.html";
+    // Bersihkan huruf besar/kecil & spasi supaya tidak salah baca role
+    // (misal "Murid" atau " murid " tetap dianggap sama dengan "murid").
+    const roleBersih = (profil.role || "").trim().toLowerCase();
+    const peranWajibBersih = (peranWajib || "").trim().toLowerCase();
+
+    if (roleBersih !== peranWajibBersih) {
+        const halamanTujuan = roleBersih === "guru" ? "dashboard-guru.html" : "dashboard-murid.html";
+        redirectDenganPengamanLoop(halamanTujuan);
         return null;
     }
 
+    // Berhasil sampai di halaman yang benar -> hapus penghitung, supaya
+    // proteksi anti-loop ini tetap berfungsi normal di sesi berikutnya.
+    sessionStorage.removeItem("pelitaku_percobaan_redirect");
     return profil;
 }
 
