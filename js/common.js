@@ -204,3 +204,63 @@ window.addEventListener("offline", () => {
 window.addEventListener("online", () => {
     tampilkanToast("Koneksi internet tersambung kembali.", "sukses");
 });
+
+// =====================================================================
+// FUNGSI HASIL REFACTOR FASE 2
+// (sebelumnya duplikat/mirip di murid.js dan guru.js)
+// =====================================================================
+
+/**
+ * Membersihkan teks dari karakter HTML berbahaya sebelum dimasukkan ke innerHTML,
+ * supaya isian murid/guru (misal nama, renungan, jawaban kuis) tidak bisa
+ * menyisipkan tag HTML/script (XSS). Dipakai di murid.js dan guru.js.
+ */
+function escapeHtml(teks) {
+    const elemen = document.createElement("div");
+    elemen.textContent = teks;
+    return elemen.innerHTML;
+}
+
+/**
+ * Mengambil jadwal minggu yang sedang aktif (status_aktif = true).
+ * Dipakai baik oleh murid.js (lewat view "jadwal_publik", tanpa PIN)
+ * maupun guru.js (lewat tabel asli "jadwal_mingguan", termasuk PIN).
+ * @param {string} namaSumber - "jadwal_publik" untuk murid, "jadwal_mingguan" untuk guru.
+ */
+async function ambilJadwalMingguAktif(namaSumber) {
+    return await klienSupabase
+        .from(namaSumber)
+        .select("*")
+        .eq("status_aktif", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+}
+
+/**
+ * Menangani pola respons standar dari pemanggilan RPC Supabase:
+ * - Kalau ada error koneksi/server -> tampilkan toast error ramah, kembalikan false.
+ * - Kalau RPC berhasil dipanggil tapi hasilnya { sukses: false, pesan: ... } -> tampilkan toast error, kembalikan false.
+ * - Kalau berhasil -> tampilkan toast sukses, kembalikan true.
+ * Dipakai di semua pemanggilan RPC (catat_kehadiran, submit_renungan, submit_kuis, klaim_reward).
+ * @param {object} data - Hasil `data` dari `klienSupabase.rpc(...)`.
+ * @param {object} error - Hasil `error` dari `klienSupabase.rpc(...)`.
+ * @param {string} pesanFallbackGagal - Pesan default kalau `data.pesan` tidak ada.
+ * @param {string} [pesanSuksesKustom] - Kalau diisi, dipakai sebagai teks toast sukses
+ *   menggantikan `data.pesan` bawaan (misal untuk menyisipkan skor kuis).
+ * @returns {boolean} true kalau operasi berhasil (sukses === true).
+ */
+function prosesResponRpc(data, error, pesanFallbackGagal, pesanSuksesKustom) {
+    if (error) {
+        tampilkanToast(pesanRamahDariError(error), "error");
+        return false;
+    }
+
+    if (!data || !data.sukses) {
+        tampilkanToast((data && data.pesan) || pesanFallbackGagal || "Terjadi kesalahan.", "error");
+        return false;
+    }
+
+    tampilkanToast(pesanSuksesKustom || data.pesan, "sukses");
+    return true;
+}

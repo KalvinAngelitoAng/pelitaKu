@@ -1,590 +1,536 @@
 // =====================================================================
-// PELITAKU - LOGIKA DASHBOARD MURID
+// PELITAKU - LOGIKA DASHBOARD GURU
 // =====================================================================
 
-const KELIPATAN_POIN_REWARD = 20; // 1 level Susu Gratis = 20 poin (setara 2 minggu: 6 renungan + 4 kuis per minggu)
-
-let profilMurid = null;
-let jadwalAktif = null;
-let statusAbsenSaatIni = null; // 'hadir' | 'izin' | null
-let kuisAktif = null;
-let daftarSoalKuis = [];
-let daftarAyatHarianMinggu = []; // 6 ayat (Senin-Sabtu) untuk jadwal aktif
-let ayatHarianAktif = null; // ayat untuk hari ini (null jika hari Minggu / belum diisi guru)
+let profilGuru = null;
+let hitungSoalKuisBaru = 0;
+let jadwalAktifIdGuru = null; // id jadwal_mingguan yang sedang aktif
 
 // =====================================================================
 // INISIALISASI HALAMAN
 // =====================================================================
-(async function inisialisasiDashboardMurid() {
-    profilMurid = await pastikanSudahLogin("murid");
-    if (!profilMurid) return;
+(async function inisialisasiDashboardGuru() {
+    profilGuru = await pastikanSudahLogin("guru");
+    if (!profilGuru) return;
 
-    document.getElementById("fotoProfilPlaceholder").innerHTML = SVG_FOTO_PROFIL;
-    document.getElementById("teksNamaMurid").textContent = profilMurid.nama_lengkap;
-    document.getElementById("teksKelasMurid").textContent = profilMurid.kelas || "-";
-    document.getElementById("teksTanggalLahirMurid").textContent = formatTanggalIndonesia(profilMurid.tanggal_lahir);
+    document.getElementById("teksNamaGuru").textContent = profilGuru.nama_lengkap;
 
-    perbaruiTampilanPoin();
+    renderFormAyatHarian();
+    await muatDaftarMurid();
+    await muatJadwalAktifGuru();
+    await muatRenunganHarian(document.getElementById("pilihanHariRenungan").value);
+    await muatDaftarKuis();
+    tambahBarisSoal(); // mulai dengan 1 baris soal kosong
 
-    await muatJadwalAktif();
-    await muatStatusAbsensi();
-    await muatAyatDanRenunganHarian();
-    await muatKuis();
-
-    pasangEventListener();
+    pasangEventListenerGuru();
 })();
 
-function pasangEventListener() {
-    document.getElementById("tombolAbsenHadir").addEventListener("click", tanganiAbsenHadir);
-    document.getElementById("tombolBukaFormIzin").addEventListener("click", () => {
-        document.getElementById("wadahFormIzin").style.display = "block";
+function pasangEventListenerGuru() {
+    document.getElementById("tombolAcakPin").addEventListener("click", () => {
+        const pinAcak = Math.floor(1000 + Math.random() * 9000).toString();
+        document.getElementById("inputPinBaru").value = pinAcak;
     });
-    document.getElementById("tombolKirimIzin").addEventListener("click", tanganiKirimIzin);
 
-    // Catatan: listener untuk textarea & tombol renungan dipasang secara dinamis
-    // di dalam muatAyatDanRenunganHarian(), karena form-nya berubah tiap hari.
+    document.getElementById("formJadwalBaru").addEventListener("submit", tanganiSimpanJadwalBaru);
+    document.getElementById("tombolTambahSoal").addEventListener("click", tambahBarisSoal);
+    document.getElementById("formKuisBaru").addEventListener("submit", tanganiSimpanKuisBaru);
 
-    document.getElementById("tombolKlaimSusu").addEventListener("click", tanganiKlaimSusu);
+    document.getElementById("pilihanHariRenungan").addEventListener("change", (peristiwa) => {
+        muatRenunganHarian(peristiwa.target.value);
+    });
 }
 
 // =====================================================================
-// BAGIAN POIN & REWARD (BOTOL SUSU)
+// BAGIAN DATA MURID & EVALUASI
 // =====================================================================
-function perbaruiTampilanPoin() {
-    const poinSaatIni = profilMurid.total_poin;
-    document.getElementById("teksInfoPoin").textContent = `Poin kamu: ${poinSaatIni}`;
+async function muatDaftarMurid() {
+    document.getElementById("tabelDaftarMurid").innerHTML = skeletonTabelHtml(5, 3);
 
-    muatReward(poinSaatIni);
-}
-
-async function muatReward(poinSaatIni) {
-    const { data: klaimData } = await klienSupabase
-        .from("reward_claims")
-        .select("target_poin")
-        .eq("murid_id", profilMurid.id);
-
-    const jumlahSudahDiklaim = (klaimData || []).length;
-
-    // Target berikutnya selalu kelipatan 20 berikutnya yang belum diklaim.
-    // Contoh: belum pernah klaim -> target 20. Sudah klaim 1x -> target 40. Dst, tanpa batas atas.
-    const targetBerikutnya = (jumlahSudahDiklaim + 1) * KELIPATAN_POIN_REWARD;
-
-    const barProgres = document.getElementById("barProgresPoin");
-    const teksTarget = document.getElementById("teksTargetPoin");
-    const isiSusu = document.getElementById("isiSusu");
-    const tombolKlaim = document.getElementById("tombolKlaimSusu");
-
-    const persentase = Math.min(100, Math.round((poinSaatIni / targetBerikutnya) * 100));
-    barProgres.style.width = `${persentase}%`;
-    teksTarget.textContent = `${poinSaatIni} / ${targetBerikutnya} poin menuju Susu Gratis level ${jumlahSudahDiklaim + 1}`;
-
-    const tinggiIsi = (persentase / 100) * 74;
-    isiSusu.setAttribute("y", 100 - tinggiIsi);
-    isiSusu.setAttribute("height", tinggiIsi);
-
-    if (poinSaatIni >= targetBerikutnya) {
-        tombolKlaim.className = "btn btn-pelitaku-kuning";
-        tombolKlaim.disabled = false;
-        tombolKlaim.textContent = "Claim Susu";
-        tombolKlaim.dataset.target = targetBerikutnya;
-    } else {
-        tombolKlaim.className = "btn btn-pelitaku-nonaktif";
-        tombolKlaim.disabled = true;
-        tombolKlaim.textContent = "Claim Susu";
-    }
-}
-
-async function tanganiKlaimSusu() {
-    const tombol = document.getElementById("tombolKlaimSusu");
-    const target = parseInt(tombol.dataset.target, 10);
-
-    tombol.disabled = true;
-    tombol.textContent = "Memproses...";
-
-    const { data, error } = await klienSupabase.rpc("klaim_reward", { p_target_poin: target });
-
-    if (error) {
-        tampilkanToast(pesanRamahDariError(error), "error");
-        tombol.disabled = false;
-        tombol.textContent = "Claim Susu";
-        return;
-    }
-
-    if (!data.sukses) {
-        tampilkanToast(data.pesan || "Gagal klaim reward.", "error");
-        tombol.disabled = false;
-        tombol.textContent = "Claim Susu";
-        return;
-    }
-
-    tampilkanToast(data.pesan, "sukses");
-    await muatReward(profilMurid.total_poin);
-}
-
-// =====================================================================
-// BAGIAN JADWAL MINGGU AKTIF
-// =====================================================================
-async function muatJadwalAktif() {
-    const { data, error } = await klienSupabase
-        .from("jadwal_publik")
+    const { data: daftarMurid, error } = await klienSupabase
+        .from("profil")
         .select("*")
-        .eq("status_aktif", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .eq("role", "murid")
+        .order("nama_lengkap", { ascending: true });
 
-    if (error || !data) {
-        document.getElementById("teksInfoMinggu").textContent = "Belum ada jadwal minggu ini. Hubungi guru pembina.";
+    const tabel = document.getElementById("tabelDaftarMurid");
+
+    if (error || !daftarMurid || daftarMurid.length === 0) {
+        tabel.innerHTML = `<tr><td colspan="5" class="text-center teks-lembut">Belum ada data murid.</td></tr>`;
         return;
     }
 
-    jadwalAktif = data;
-    document.getElementById("teksInfoMinggu").textContent = jadwalAktif.minggu_ke;
+    tabel.innerHTML = daftarMurid.map((murid) => `
+        <tr>
+            <td>${escapeHtml(murid.nama_lengkap)}</td>
+            <td>${escapeHtml(murid.kelas || "-")}</td>
+            <td>${murid.total_poin}</td>
+            <td>${murid.streak_renungan}</td>
+            <td>
+                <button class="btn btn-pelitaku-outline btn-sm" onclick="bukaDetailMurid('${murid.id}', '${escapeHtml(murid.nama_lengkap)}')">
+                    Lihat Detail
+                </button>
+            </td>
+        </tr>
+    `).join("");
+}
+
+async function bukaDetailMurid(muridId, namaMurid) {
+    document.getElementById("judulModalDetailMurid").textContent = `Detail: ${namaMurid}`;
+    document.getElementById("isiModalDetailMurid").innerHTML = skeletonHtml(4);
+
+    const modal = new bootstrap.Modal(document.getElementById("modalDetailMurid"));
+    modal.show();
+
+    const [hasilKehadiran, hasilRenungan] = await Promise.all([
+        klienSupabase
+            .from("kehadiran")
+            .select("*, jadwal_mingguan(minggu_ke, tanggal_mulai)")
+            .eq("murid_id", muridId)
+            .order("created_at", { ascending: false }),
+        klienSupabase
+            .from("renungan")
+            .select("*, jadwal_mingguan(minggu_ke), ayat_harian(hari, ayat_referensi)")
+            .eq("murid_id", muridId)
+            .order("created_at", { ascending: false })
+    ]);
+
+    const daftarKehadiran = hasilKehadiran.data || [];
+    const daftarRenungan = hasilRenungan.data || [];
+
+    let htmlKehadiran = daftarKehadiran.length === 0
+        ? `<p class="teks-lembut">Belum ada riwayat absensi.</p>`
+        : `<ul class="list-unstyled">` + daftarKehadiran.map((absen) => `
+            <li class="mb-2 pb-2" style="border-bottom: 1px solid var(--warna-abu-nonaktif);">
+                <b>${escapeHtml(absen.jadwal_mingguan?.minggu_ke || "-")}</b> -
+                ${absen.status === "hadir" ? '<span class="status-hadir">Hadir</span>' : '<span class="status-izin">Izin</span>'}
+                ${absen.status === "izin" ? `<br><span class="teks-lembut">Alasan: ${escapeHtml(absen.alasan_izin || "-")}</span>` : ""}
+            </li>
+        `).join("") + `</ul>`;
+
+    let htmlRenungan = daftarRenungan.length === 0
+        ? `<p class="teks-lembut">Belum ada renungan yang dikirim.</p>`
+        : daftarRenungan.map((renungan) => `
+            <div class="mb-3 p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
+                <p class="fw-bold mb-1">
+                    ${escapeHtml(renungan.jadwal_mingguan?.minggu_ke || "-")}
+                    ${renungan.ayat_harian ? ` - ${NAMA_HARI_RENUNGAN[renungan.ayat_harian.hari] || ""} (${escapeHtml(renungan.ayat_harian.ayat_referensi)})` : ""}
+                </p>
+                <p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(renungan.isi_renungan)}</p>
+            </div>
+        `).join("");
+
+    document.getElementById("isiModalDetailMurid").innerHTML = `
+        <h6 class="fw-bold mb-2">Riwayat Absensi</h6>
+        ${htmlKehadiran}
+        <div class="divider-pelitaku"></div>
+        <h6 class="fw-bold mb-2">Riwayat Renungan</h6>
+        ${htmlRenungan}
+    `;
 }
 
 // =====================================================================
-// BAGIAN ABSENSI
+// BAGIAN JADWAL MINGGUAN, PIN & AYAT HARIAN
 // =====================================================================
-async function muatStatusAbsensi() {
-    if (!jadwalAktif) {
-        tampilkanKuncianKuis("Belum ada jadwal minggu ini.");
-        return;
-    }
-
-    const { data } = await klienSupabase
-        .from("kehadiran")
-        .select("*")
-        .eq("murid_id", profilMurid.id)
-        .eq("jadwal_id", jadwalAktif.id)
-        .maybeSingle();
-
-    const badge = document.getElementById("badgeStatusAbsen");
-    const wadahForm = document.getElementById("wadahFormAbsen");
-
-    if (data) {
-        statusAbsenSaatIni = data.status;
-        if (data.status === "hadir") {
-            badge.innerHTML = `<span class="status-hadir">Hadir</span>`;
-        } else {
-            badge.innerHTML = `<span class="status-izin">Izin</span>`;
-        }
-        wadahForm.innerHTML = `<p class="teks-lembut mb-0">Kamu sudah tercatat <b>${data.status === "hadir" ? "Hadir" : "Izin"}</b> untuk minggu ini.</p>`;
-    } else {
-        badge.innerHTML = `<span class="status-belum">Belum Absen</span>`;
-    }
-}
-
-async function tanganiAbsenHadir() {
-    const pin = document.getElementById("inputPinAbsen").value.trim();
-
-    if (!jadwalAktif) return;
-    if (!pin) {
-        tampilkanToast("Masukkan PIN terlebih dahulu.", "error");
-        return;
-    }
-
-    const { data, error } = await klienSupabase.rpc("catat_kehadiran", {
-        p_jadwal_id: jadwalAktif.id,
-        p_pin: pin
-    });
-
-    if (error) {
-        tampilkanToast(pesanRamahDariError(error), "error");
-        return;
-    }
-
-    if (!data.sukses) {
-        tampilkanToast(data.pesan || "Terjadi kesalahan.", "error");
-        return;
-    }
-
-    tampilkanToast(data.pesan, "sukses");
-    await muatStatusAbsensi();
-    await muatKuis();
-}
-
-async function tanganiKirimIzin() {
-    const alasan = document.getElementById("inputAlasanIzin").value.trim();
-
-    if (!jadwalAktif) return;
-    if (!alasan) {
-        tampilkanToast("Alasan izin wajib diisi.", "error");
-        return;
-    }
-
-    const { error } = await klienSupabase.from("kehadiran").insert({
-        murid_id: profilMurid.id,
-        jadwal_id: jadwalAktif.id,
-        status: "izin",
-        alasan_izin: alasan
-    });
-
-    if (error) {
-        tampilkanToast("Gagal mengirim izin. Kamu mungkin sudah absen minggu ini.", "error");
-        return;
-    }
-
-    tampilkanToast("Izin berhasil dicatat.", "sukses");
-    await muatStatusAbsensi();
-    await muatKuis();
-}
-
-// =====================================================================
-// BAGIAN RENUNGAN
-// =====================================================================
-function perbaruiJumlahKarakterRenungan() {
-    const isi = document.getElementById("inputRenungan").value.trim();
-    const teksJumlah = document.getElementById("teksJumlahKarakter");
-    const tombolKirim = document.getElementById("tombolKirimRenungan");
-
-    teksJumlah.textContent = `${isi.length} / 50 karakter minimal`;
-
-    if (isi.length >= 50) {
-        tombolKirim.disabled = false;
-        teksJumlah.className = "pesan-sukses mb-2 mt-1";
-    } else {
-        tombolKirim.disabled = true;
-        teksJumlah.className = "teks-lembut mb-2 mt-1";
-        teksJumlah.style.fontSize = "0.85rem";
-    }
-}
 
 /**
- * Memuat 6 ayat harian (Senin-Sabtu) minggu ini, menampilkan pelacak progres,
- * lalu menampilkan ayat & form renungan sesuai hari berjalan saat ini.
+ * Membuat 6 blok input ayat harian (Senin-Sabtu) di form "Buat Jadwal Minggu Baru".
  */
-async function muatAyatDanRenunganHarian() {
-    const wadahAyat = document.getElementById("wadahAyatRenungan");
-    const wadahForm = document.getElementById("wadahFormRenungan");
-    const wadahPelacak = document.getElementById("wadahPelacakMingguan");
+function renderFormAyatHarian() {
+    const wadah = document.getElementById("wadahAyatHarianForm");
+    wadah.innerHTML = [1, 2, 3, 4, 5, 6].map((kodeHari) => `
+        <div class="mb-3 p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
+            <p class="fw-bold mb-2">${NAMA_HARI_RENUNGAN[kodeHari]}</p>
+            <div class="mb-2">
+                <input type="text" class="form-control form-control-pelitaku input-ayat-referensi-hari"
+                    data-hari="${kodeHari}" placeholder="Referensi ayat, contoh: Yohanes 3:16" required>
+            </div>
+            <textarea class="form-control form-control-pelitaku input-ayat-isi-hari"
+                data-hari="${kodeHari}" rows="2" placeholder="Isi ayat..." required></textarea>
+        </div>
+    `).join("");
+}
 
-    wadahAyat.innerHTML = skeletonHtml(2);
+async function muatJadwalAktifGuru() {
+    document.getElementById("wadahJadwalAktifGuru").innerHTML = skeletonHtml(3);
 
-    if (!jadwalAktif) {
-        wadahAyat.innerHTML = `<p class="teks-lembut mb-0">Belum ada jadwal minggu ini.</p>`;
-        wadahForm.innerHTML = "";
-        wadahPelacak.innerHTML = "";
+    const { data, error } = await ambilJadwalMingguAktif("jadwal_mingguan");
+
+    const wadah = document.getElementById("wadahJadwalAktifGuru");
+
+    if (error || !data) {
+        wadah.innerHTML = `<p class="teks-lembut">Belum ada jadwal aktif.</p>`;
+        jadwalAktifIdGuru = null;
         return;
     }
 
-    const { data: ayatMinggu, error: errorAyat } = await klienSupabase
-        .from("ayat_harian_publik")
+    jadwalAktifIdGuru = data.id;
+
+    const { data: daftarAyat } = await klienSupabase
+        .from("ayat_harian")
         .select("*")
-        .eq("jadwal_id", jadwalAktif.id)
+        .eq("jadwal_id", data.id)
         .order("hari", { ascending: true });
 
-    daftarAyatHarianMinggu = ayatMinggu || [];
+    const htmlAyat = (daftarAyat || []).map((ayat) => `
+        <li><b>${NAMA_HARI_RENUNGAN[ayat.hari]}</b>: ${escapeHtml(ayat.ayat_referensi)}</li>
+    `).join("");
 
-    const { data: renunganTerkirim } = await klienSupabase
-        .from("renungan")
-        .select("ayat_harian_id, isi_renungan")
-        .eq("murid_id", profilMurid.id)
-        .eq("jadwal_id", jadwalAktif.id);
+    wadah.innerHTML = `
+        <p class="fw-bold mb-1">${escapeHtml(data.minggu_ke)}</p>
+        <p class="mb-1">PIN Absensi: <span class="fw-bold" style="letter-spacing: 2px;">${escapeHtml(data.pin_absensi)}</span></p>
+        <p class="teks-lembut mb-2" style="font-size: 0.85rem;">
+            Periode: ${formatTanggalIndonesia(data.tanggal_mulai)} - ${formatTanggalIndonesia(data.tanggal_selesai)}
+        </p>
+        <p class="mb-1 fw-bold" style="font-size: 0.9rem;">Ayat Harian (${(daftarAyat || []).length}/6 terisi)</p>
+        <ul class="mb-0" style="font-size: 0.9rem;">${htmlAyat || "<li class='teks-lembut'>Belum ada ayat harian.</li>"}</ul>
+    `;
+}
 
-    const petaRenunganTerkirim = {};
-    (renunganTerkirim || []).forEach((baris) => {
-        petaRenunganTerkirim[baris.ayat_harian_id] = baris.isi_renungan;
-    });
+async function tanganiSimpanJadwalBaru(peristiwa) {
+    peristiwa.preventDefault();
 
-    // Render chip pelacak progres Senin-Sabtu
-    wadahPelacak.innerHTML = [1, 2, 3, 4, 5, 6].map((kodeHari) => {
-        const ayatHari = daftarAyatHarianMinggu.find((a) => a.hari === kodeHari);
-        const sudahSelesai = ayatHari && petaRenunganTerkirim[ayatHari.id];
-        const kelas = sudahSelesai ? "status-hadir" : "status-belum";
-        return `<span class="${kelas}" style="font-size: 0.75rem;">${NAMA_HARI_RENUNGAN[kodeHari]}</span>`;
-    }).join(" ");
+    const inputReferensi = document.querySelectorAll(".input-ayat-referensi-hari");
+    const inputIsi = document.querySelectorAll(".input-ayat-isi-hari");
+
+    const daftarAyatHarian = [];
+    for (let i = 0; i < inputReferensi.length; i++) {
+        const referensi = inputReferensi[i].value.trim();
+        const isi = inputIsi[i].value.trim();
+        const hari = parseInt(inputReferensi[i].dataset.hari, 10);
+
+        if (!referensi || !isi) {
+            tampilkanToast(`Lengkapi ayat untuk hari ${NAMA_HARI_RENUNGAN[hari]}.`, "error");
+            return;
+        }
+
+        daftarAyatHarian.push({ hari, ayat_referensi: referensi, ayat_isi: isi });
+    }
+
+    const dataJadwalBaru = {
+        minggu_ke: document.getElementById("inputMingguKe").value.trim(),
+        pin_absensi: document.getElementById("inputPinBaru").value.trim(),
+        tanggal_mulai: document.getElementById("inputTanggalMulai").value,
+        tanggal_selesai: document.getElementById("inputTanggalSelesai").value,
+        dibuat_oleh: profilGuru.id,
+        status_aktif: true
+    };
+
+    const tombolSimpan = document.querySelector("#formJadwalBaru button[type=submit]");
+    tombolSimpan.disabled = true;
+    tombolSimpan.textContent = "Menyimpan...";
+
+    // Nonaktifkan jadwal-jadwal sebelumnya agar hanya ada 1 jadwal aktif
+    await klienSupabase.from("jadwal_mingguan").update({ status_aktif: false }).eq("status_aktif", true);
+
+    const { data: jadwalBaru, error: errorJadwal } = await klienSupabase
+        .from("jadwal_mingguan")
+        .insert(dataJadwalBaru)
+        .select()
+        .single();
+
+    if (errorJadwal || !jadwalBaru) {
+        tampilkanToast(errorJadwal ? pesanRamahDariError(errorJadwal) : "Gagal menyimpan jadwal.", "error");
+        tombolSimpan.disabled = false;
+        tombolSimpan.textContent = "Simpan Jadwal & Aktifkan";
+        return;
+    }
+
+    const ayatHarianDenganJadwalId = daftarAyatHarian.map((ayat) => ({ ...ayat, jadwal_id: jadwalBaru.id }));
+    const { error: errorAyat } = await klienSupabase.from("ayat_harian").insert(ayatHarianDenganJadwalId);
+
+    tombolSimpan.disabled = false;
+    tombolSimpan.textContent = "Simpan Jadwal & Aktifkan";
 
     if (errorAyat) {
-        wadahAyat.innerHTML = `<p class="teks-lembut mb-0">Gagal memuat ayat renungan.</p>`;
-        wadahForm.innerHTML = "";
+        tampilkanToast(`Jadwal tersimpan, tetapi gagal menyimpan ayat harian: ${errorAyat.message}`, "error");
         return;
     }
 
-    const kodeHariIni = ambilKodeHariRenunganHariIni();
+    tampilkanToast("Jadwal baru & 6 ayat harian berhasil disimpan dan diaktifkan.", "sukses");
+    document.getElementById("formJadwalBaru").reset();
+    renderFormAyatHarian();
+    await muatJadwalAktifGuru();
+    await muatRenunganHarian(document.getElementById("pilihanHariRenungan").value);
+}
 
-    if (kodeHariIni === null) {
-        wadahAyat.innerHTML = `<p class="mb-0 fw-bold">Hari ini hari Minggu.</p><p class="mb-0 teks-lembut">Waktunya beribadah dan absen di Sekolah Minggu. Renungan harian dibuka lagi besok Senin.</p>`;
-        wadahForm.innerHTML = "";
+// =====================================================================
+// BAGIAN RENUNGAN HARIAN (guru membaca jawaban murid per hari)
+// =====================================================================
+async function muatRenunganHarian(hariTerpilihString) {
+    const hariTerpilih = parseInt(hariTerpilihString, 10);
+    const wadahAyat = document.getElementById("wadahAyatHariTerpilih");
+    const wadahRenungan = document.getElementById("wadahRenunganHarian");
+
+    wadahAyat.innerHTML = skeletonHtml(2);
+    wadahRenungan.innerHTML = skeletonHtml(3);
+
+    if (!jadwalAktifIdGuru) {
+        wadahAyat.innerHTML = `<p class="teks-lembut mb-0">Belum ada jadwal minggu aktif.</p>`;
+        wadahRenungan.innerHTML = "";
         return;
     }
 
-    ayatHarianAktif = daftarAyatHarianMinggu.find((a) => a.hari === kodeHariIni);
+    const { data: ayatHari } = await klienSupabase
+        .from("ayat_harian")
+        .select("*")
+        .eq("jadwal_id", jadwalAktifIdGuru)
+        .eq("hari", hariTerpilih)
+        .maybeSingle();
 
-    if (!ayatHarianAktif) {
-        wadahAyat.innerHTML = `<p class="mb-0 teks-lembut">Ayat untuk hari ${NAMA_HARI_RENUNGAN[kodeHariIni]} belum diisi oleh guru pembina. Coba cek lagi nanti.</p>`;
-        wadahForm.innerHTML = "";
+    if (!ayatHari) {
+        wadahAyat.innerHTML = `<p class="teks-lembut mb-0">Ayat untuk hari ${NAMA_HARI_RENUNGAN[hariTerpilih]} belum diisi pada jadwal minggu ini.</p>`;
+        wadahRenungan.innerHTML = "";
         return;
     }
 
     wadahAyat.innerHTML = `
-        <p class="teks-lembut mb-1" style="font-size: 0.8rem;">Renungan hari ${NAMA_HARI_RENUNGAN[kodeHariIni]}</p>
-        <p class="fw-bold mb-1">${escapeHtml(ayatHarianAktif.ayat_referensi)}</p>
-        <p class="mb-0 fst-italic">${escapeHtml(ayatHarianAktif.ayat_isi)}</p>
+        <p class="fw-bold mb-1">${escapeHtml(ayatHari.ayat_referensi)}</p>
+        <p class="mb-0 fst-italic">${escapeHtml(ayatHari.ayat_isi)}</p>
     `;
 
-    const isiSudahDikirim = petaRenunganTerkirim[ayatHarianAktif.id];
+    wadahRenungan.innerHTML = skeletonHtml(3);
 
-    if (isiSudahDikirim) {
-        wadahForm.innerHTML = `
-            <p class="pesan-sukses mb-2">Renungan hari ${NAMA_HARI_RENUNGAN[kodeHariIni]} sudah dikumpulkan.</p>
-            <div class="p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
-                <p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(isiSudahDikirim)}</p>
-            </div>
-        `;
-    } else {
-        wadahForm.innerHTML = `
-            <textarea id="inputRenungan" class="form-control form-control-pelitaku" rows="4"
-                placeholder="Tuliskan renungan kamu tentang ayat di atas (minimal 50 karakter)..."></textarea>
-            <p class="teks-lembut mb-2 mt-1" id="teksJumlahKarakter" style="font-size: 0.85rem;">0 / 50 karakter minimal</p>
-            <button class="btn btn-pelitaku-primer" id="tombolKirimRenungan" disabled>Kirim Renungan</button>
-        `;
-        document.getElementById("inputRenungan").addEventListener("input", perbaruiJumlahKarakterRenungan);
-        document.getElementById("tombolKirimRenungan").addEventListener("click", tanganiKirimRenungan);
-    }
-}
+    const { data: daftarRenungan, error } = await klienSupabase
+        .from("renungan")
+        .select("*, profil(nama_lengkap, kelas)")
+        .eq("ayat_harian_id", ayatHari.id)
+        .order("created_at", { ascending: true });
 
-async function tanganiKirimRenungan() {
-    const isi = document.getElementById("inputRenungan").value.trim();
-
-    if (!ayatHarianAktif) return;
-    if (isi.length < 50) {
-        tampilkanToast("Renungan minimal 50 karakter.", "error");
+    if (error || !daftarRenungan || daftarRenungan.length === 0) {
+        wadahRenungan.innerHTML = `<p class="teks-lembut mb-0">Belum ada murid yang mengisi renungan untuk hari ini.</p>`;
         return;
     }
 
-    const tombol = document.getElementById("tombolKirimRenungan");
-    tombol.disabled = true;
-    tombol.textContent = "Mengirim...";
-
-    const { data, error } = await klienSupabase.rpc("submit_renungan", {
-        p_ayat_harian_id: ayatHarianAktif.id,
-        p_isi_renungan: isi
-    });
-
-    if (error) {
-        tampilkanToast(pesanRamahDariError(error), "error");
-        tombol.disabled = false;
-        tombol.textContent = "Kirim Renungan";
-        return;
-    }
-
-    if (!data.sukses) {
-        tampilkanToast(data.pesan || "Gagal mengirim renungan.", "error");
-        tombol.disabled = false;
-        tombol.textContent = "Kirim Renungan";
-        return;
-    }
-
-    tampilkanToast(data.pesan, "sukses");
-    profilMurid.total_poin += 1;
-    perbaruiTampilanPoin();
-    await muatAyatDanRenunganHarian();
-}
-
-// =====================================================================
-// BAGIAN KUIS
-// =====================================================================
-function tampilkanKuncianKuis(alasan) {
-    document.getElementById("wadahKuis").innerHTML = `
-        <div class="terkunci">
-            <p class="teks-lembut mb-0">Kuis terkunci. ${alasan}</p>
+    wadahRenungan.innerHTML = daftarRenungan.map((renungan) => `
+        <div class="mb-3 p-3" style="background-color: var(--warna-krem); border-radius: var(--radius-kecil);">
+            <p class="fw-bold mb-1">${escapeHtml(renungan.profil?.nama_lengkap || "Murid")} <span class="teks-lembut fw-normal">(${escapeHtml(renungan.profil?.kelas || "-")})</span></p>
+            <p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(renungan.isi_renungan)}</p>
         </div>
-    `;
+    `).join("");
 }
 
-async function muatKuis() {
-    if (!statusAbsenSaatIni) {
-        tampilkanKuncianKuis("Kamu harus absen Hadir atau Izin terlebih dahulu sebelum bisa mengerjakan kuis.");
-        return;
-    }
+// =====================================================================
+// BAGIAN DAFTAR & DETAIL KUIS
+// =====================================================================
+async function muatDaftarKuis() {
+    document.getElementById("tabelDaftarKuis").innerHTML = skeletonTabelHtml(5, 2);
 
-    document.getElementById("wadahKuis").innerHTML = skeletonHtml(3);
-
-    // Ambil status kuis (judul & waktu) dari view publik, terlepas dari jendela waktu,
-    // supaya murid tahu persis kenapa kuis belum/tidak bisa dikerjakan.
     const { data: daftarKuis, error } = await klienSupabase
-        .from("kuis_status_publik")
+        .from("kuis")
         .select("*")
-        .order("waktu_mulai", { ascending: false })
-        .limit(1);
+        .order("waktu_mulai", { ascending: false });
+
+    const tabel = document.getElementById("tabelDaftarKuis");
 
     if (error || !daftarKuis || daftarKuis.length === 0) {
-        document.getElementById("wadahKuis").innerHTML = `<p class="teks-lembut mb-0">Belum ada kuis yang dijadwalkan untuk minggu ini.</p>`;
+        tabel.innerHTML = `<tr><td colspan="5" class="text-center teks-lembut">Belum ada kuis yang dibuat.</td></tr>`;
         return;
     }
 
-    kuisAktif = daftarKuis[0];
-    const status = tentukanStatusKuis(kuisAktif.waktu_mulai, kuisAktif.waktu_selesai);
+    tabel.innerHTML = daftarKuis.map((kuis) => {
+        const status = tentukanStatusKuis(kuis.waktu_mulai, kuis.waktu_selesai);
+        const labelStatus = status === "aktif"
+            ? '<span class="status-hadir">Sedang Berlangsung</span>'
+            : status === "akan_datang"
+                ? '<span class="status-belum">Akan Datang</span>'
+                : '<span class="status-izin">Sudah Berakhir</span>';
 
-    // Cek apakah sudah pernah submit (berlaku untuk status apa pun, termasuk sudah berakhir)
-    const { data: hasilKuis } = await klienSupabase
-        .from("jawaban_kuis")
+        return `
+            <tr>
+                <td>${escapeHtml(kuis.judul)}</td>
+                <td>${new Date(kuis.waktu_mulai).toLocaleString("id-ID")}</td>
+                <td>${new Date(kuis.waktu_selesai).toLocaleString("id-ID")}</td>
+                <td>${labelStatus}</td>
+                <td>
+                    <button class="btn btn-pelitaku-outline btn-sm" onclick="bukaDetailSoalKuis('${kuis.id}', '${escapeHtml(kuis.judul)}')">
+                        Lihat Soal
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join("");
+}
+
+async function bukaDetailSoalKuis(kuisId, judulKuis) {
+    document.getElementById("judulModalDetailKuis").textContent = `Soal: ${judulKuis}`;
+    document.getElementById("isiModalDetailKuis").innerHTML = skeletonHtml(4);
+
+    const modal = new bootstrap.Modal(document.getElementById("modalDetailKuis"));
+    modal.show();
+
+    const { data: daftarSoal, error } = await klienSupabase
+        .from("soal_kuis")
         .select("*")
-        .eq("murid_id", profilMurid.id)
-        .eq("kuis_id", kuisAktif.id)
-        .maybeSingle();
-
-    if (hasilKuis) {
-        document.getElementById("wadahKuis").innerHTML = `
-            <p class="pesan-sukses mb-0">Kamu sudah mengumpulkan kuis "${escapeHtml(kuisAktif.judul)}". Skor: ${hasilKuis.skor}</p>
-        `;
-        hapusProgresLocalStorage();
-        return;
-    }
-
-    if (status === "akan_datang") {
-        document.getElementById("wadahKuis").innerHTML = `
-            <p class="teks-lembut mb-0">Kuis "${escapeHtml(kuisAktif.judul)}" akan dibuka pada ${new Date(kuisAktif.waktu_mulai).toLocaleString("id-ID")}. Kembali lagi nanti ya.</p>
-        `;
-        return;
-    }
-
-    if (status === "berakhir") {
-        document.getElementById("wadahKuis").innerHTML = `
-            <p class="teks-lembut mb-0">Waktu pengerjaan kuis "${escapeHtml(kuisAktif.judul)}" sudah berakhir pada ${new Date(kuisAktif.waktu_selesai).toLocaleString("id-ID")}.</p>
-        `;
-        return;
-    }
-
-    // status === 'aktif'
-    const { data: soal, error: errorSoal } = await klienSupabase
-        .from("soal_kuis_publik")
-        .select("*")
-        .eq("kuis_id", kuisAktif.id)
+        .eq("kuis_id", kuisId)
         .order("urutan", { ascending: true });
 
-    if (errorSoal || !soal || soal.length === 0) {
-        document.getElementById("wadahKuis").innerHTML = `<p class="teks-lembut mb-0">Kuis "${escapeHtml(kuisAktif.judul)}" sedang aktif, tetapi soal belum tersedia. Hubungi guru pembina.</p>`;
+    if (error || !daftarSoal || daftarSoal.length === 0) {
+        document.getElementById("isiModalDetailKuis").innerHTML = `<p class="teks-lembut mb-0">Belum ada soal untuk kuis ini.</p>`;
         return;
     }
 
-    daftarSoalKuis = soal;
-    renderFormKuis();
+    document.getElementById("isiModalDetailKuis").innerHTML = daftarSoal.map((soal, indeks) => `
+        <div class="mb-4">
+            <p class="fw-bold mb-2">${indeks + 1}. ${escapeHtml(soal.pertanyaan)}</p>
+            ${["a", "b", "c", "d"].map((opsi) => `
+                <p class="mb-1 ${soal.kunci_jawaban === opsi ? "pesan-sukses fw-bold" : ""}">
+                    ${opsi.toUpperCase()}. ${escapeHtml(soal["opsi_" + opsi])}
+                    ${soal.kunci_jawaban === opsi ? " (Kunci Jawaban)" : ""}
+                </p>
+            `).join("")}
+        </div>
+    `).join("");
 }
 
-function kunciLocalStorageKuis() {
-    return `pelitaku_progres_kuis_${kuisAktif.id}_${profilMurid.id}`;
-}
+// =====================================================================
+// BAGIAN BUAT KUIS
+// =====================================================================
+function tambahBarisSoal() {
+    hitungSoalKuisBaru += 1;
+    const idUnikSoal = hitungSoalKuisBaru; // hanya dipakai sebagai ID DOM, bukan nomor tampilan
 
-function ambilProgresLocalStorage() {
-    try {
-        const data = localStorage.getItem(kunciLocalStorageKuis());
-        return data ? JSON.parse(data) : {};
-    } catch (kesalahan) {
-        return {};
-    }
-}
+    const div = document.createElement("div");
+    div.className = "mb-3 p-3";
+    div.style.cssText = "background-color: var(--warna-krem); border-radius: var(--radius-kecil);";
+    div.id = `barisSoal_${idUnikSoal}`;
 
-function simpanProgresLocalStorage(jawabanSaatIni) {
-    localStorage.setItem(kunciLocalStorageKuis(), JSON.stringify(jawabanSaatIni));
-}
-
-function hapusProgresLocalStorage() {
-    if (kuisAktif) {
-        localStorage.removeItem(kunciLocalStorageKuis());
-    }
-}
-
-function renderFormKuis() {
-    const progresTersimpan = ambilProgresLocalStorage();
-
-    let htmlSoal = `
-        <p class="fw-bold mb-1">${escapeHtml(kuisAktif.judul)}</p>
-        <p class="teks-lembut mb-3" style="font-size: 0.85rem;">Batas pengerjaan: ${new Date(kuisAktif.waktu_selesai).toLocaleString("id-ID")}</p>
-        <form id="formKuis">
-    `;
-
-    daftarSoalKuis.forEach((butirSoal, indeks) => {
-        const jawabanTersimpan = progresTersimpan[butirSoal.id] || "";
-        htmlSoal += `
-            <div class="mb-4">
-                <p class="fw-bold mb-2">${indeks + 1}. ${escapeHtml(butirSoal.pertanyaan)}</p>
-                ${["a", "b", "c", "d"].map((opsi) => `
-                    <div class="form-check">
-                        <input class="form-check-input input-jawaban-kuis" type="radio"
-                            name="soal_${butirSoal.id}" value="${opsi}" data-soal-id="${butirSoal.id}"
-                            id="soal_${butirSoal.id}_${opsi}" ${jawabanTersimpan === opsi ? "checked" : ""}>
-                        <label class="form-check-label" for="soal_${butirSoal.id}_${opsi}">
-                            ${opsi.toUpperCase()}. ${escapeHtml(butirSoal["opsi_" + opsi])}
-                        </label>
+    div.innerHTML = `
+        <div class="d-flex justify-content-between mb-2">
+            <b class="label-nomor-soal">Soal</b>
+            <button type="button" class="btn btn-sm btn-pelitaku-outline" onclick="hapusBarisSoal(${idUnikSoal})">Hapus</button>
+        </div>
+        <div class="mb-2">
+            <input type="text" class="form-control form-control-pelitaku input-pertanyaan-soal" placeholder="Tulis pertanyaan..." required>
+        </div>
+        <div class="row g-2">
+            ${["a", "b", "c", "d"].map((opsi) => `
+                <div class="col-6">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">${opsi.toUpperCase()}</span>
+                        <input type="text" class="form-control input-opsi-${opsi}" placeholder="Opsi ${opsi.toUpperCase()}" required>
                     </div>
-                `).join("")}
-            </div>
-        `;
-    });
-
-    htmlSoal += `
-            <button type="submit" class="btn btn-pelitaku-primer">Kumpulkan Kuis</button>
-        </form>
+                </div>
+            `).join("")}
+        </div>
+        <div class="mt-2">
+            <label class="form-label mb-1" style="font-size: 0.85rem;">Kunci Jawaban Benar</label><br>
+            ${["a", "b", "c", "d"].map((opsi) => `
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input input-kunci-jawaban" type="radio" name="kunci_soal_${idUnikSoal}" value="${opsi}" required>
+                    <label class="form-check-label">${opsi.toUpperCase()}</label>
+                </div>
+            `).join("")}
+        </div>
     `;
 
-    document.getElementById("wadahKuis").innerHTML = htmlSoal;
-
-    // Simpan progres tiap kali murid memilih jawaban (agar tidak hilang jika koneksi putus)
-    document.querySelectorAll(".input-jawaban-kuis").forEach((elemenInput) => {
-        elemenInput.addEventListener("change", (peristiwa) => {
-            const progres = ambilProgresLocalStorage();
-            progres[peristiwa.target.dataset.soalId] = peristiwa.target.value;
-            simpanProgresLocalStorage(progres);
-        });
-    });
-
-    document.getElementById("formKuis").addEventListener("submit", tanganiSubmitKuis);
+    document.getElementById("wadahDaftarSoalForm").appendChild(div);
+    perbaruiNomorSoalTampilan();
 }
 
-async function tanganiSubmitKuis(peristiwa) {
+function hapusBarisSoal(idUnikSoal) {
+    const elemen = document.getElementById(`barisSoal_${idUnikSoal}`);
+    if (elemen) elemen.remove();
+    perbaruiNomorSoalTampilan();
+}
+
+/**
+ * Menghitung ulang label "Soal 1", "Soal 2", dst berdasarkan urutan tampil
+ * saat ini di layar -- bukan dari ID internal yang terus bertambah.
+ * Dipanggil setiap kali ada baris soal ditambah atau dihapus.
+ */
+function perbaruiNomorSoalTampilan() {
+    const semuaLabel = document.querySelectorAll("#wadahDaftarSoalForm .label-nomor-soal");
+    semuaLabel.forEach((label, indeks) => {
+        label.textContent = `Soal ${indeks + 1}`;
+    });
+}
+
+async function tanganiSimpanKuisBaru(peristiwa) {
     peristiwa.preventDefault();
 
-    const progres = ambilProgresLocalStorage();
+    const judul = document.getElementById("inputJudulKuis").value.trim();
+    const waktuMulai = document.getElementById("inputWaktuMulai").value;
+    const waktuSelesai = document.getElementById("inputWaktuSelesai").value;
 
-    if (Object.keys(progres).length < daftarSoalKuis.length) {
-        tampilkanToast("Jawab semua soal terlebih dahulu.", "error");
+    if (!waktuMulai || !waktuSelesai || new Date(waktuSelesai) <= new Date(waktuMulai)) {
+        tampilkanToast("Waktu selesai harus setelah waktu mulai.", "error");
         return;
     }
 
-    const jawabanArray = Object.entries(progres).map(([soalId, jawaban]) => ({
-        soal_id: soalId,
-        jawaban: jawaban
+    const barisSoal = document.querySelectorAll("#wadahDaftarSoalForm > div");
+    if (barisSoal.length === 0) {
+        tampilkanToast("Tambahkan minimal 1 soal.", "error");
+        return;
+    }
+
+    const daftarSoalUntukDisimpan = [];
+    for (const baris of barisSoal) {
+        const pertanyaan = baris.querySelector(".input-pertanyaan-soal").value.trim();
+        const opsiA = baris.querySelector(".input-opsi-a").value.trim();
+        const opsiB = baris.querySelector(".input-opsi-b").value.trim();
+        const opsiC = baris.querySelector(".input-opsi-c").value.trim();
+        const opsiD = baris.querySelector(".input-opsi-d").value.trim();
+        const kunciTerpilih = baris.querySelector(".input-kunci-jawaban:checked");
+
+        if (!pertanyaan || !opsiA || !opsiB || !opsiC || !opsiD || !kunciTerpilih) {
+            tampilkanToast("Lengkapi semua soal, opsi, dan kunci jawaban.", "error");
+            return;
+        }
+
+        daftarSoalUntukDisimpan.push({
+            pertanyaan, opsi_a: opsiA, opsi_b: opsiB, opsi_c: opsiC, opsi_d: opsiD,
+            kunci_jawaban: kunciTerpilih.value
+        });
+    }
+
+    const tombolSimpan = document.querySelector("#formKuisBaru button[type=submit]");
+    tombolSimpan.disabled = true;
+    tombolSimpan.textContent = "Menyimpan...";
+
+    const { data: kuisBaru, error: errorKuis } = await klienSupabase
+        .from("kuis")
+        .insert({
+            judul,
+            jadwal_id: jadwalAktifIdGuru,
+            waktu_mulai: new Date(waktuMulai).toISOString(),
+            waktu_selesai: new Date(waktuSelesai).toISOString(),
+            dibuat_oleh: profilGuru.id
+        })
+        .select()
+        .single();
+
+    if (errorKuis || !kuisBaru) {
+        tampilkanToast(errorKuis ? pesanRamahDariError(errorKuis) : "Gagal membuat kuis.", "error");
+        tombolSimpan.disabled = false;
+        tombolSimpan.textContent = "Simpan Kuis";
+        return;
+    }
+
+    const soalDenganKuisId = daftarSoalUntukDisimpan.map((soal, indeks) => ({
+        ...soal,
+        kuis_id: kuisBaru.id,
+        urutan: indeks + 1
     }));
 
-    const tombolSubmit = document.querySelector("#formKuis button[type=submit]");
-    tombolSubmit.disabled = true;
-    tombolSubmit.textContent = "Mengirim...";
+    const { error: errorSoal } = await klienSupabase.from("soal_kuis").insert(soalDenganKuisId);
 
-    const { data, error } = await klienSupabase.rpc("submit_kuis", {
-        p_kuis_id: kuisAktif.id,
-        p_jawaban: jawabanArray
-    });
+    tombolSimpan.disabled = false;
+    tombolSimpan.textContent = "Simpan Kuis";
 
-    if (error) {
-        tampilkanToast(pesanRamahDariError(error), "error");
-        tombolSubmit.disabled = false;
-        tombolSubmit.textContent = "Kumpulkan Kuis";
+    if (errorSoal) {
+        tampilkanToast(`Kuis tersimpan, tetapi gagal menyimpan soal: ${errorSoal.message}`, "error");
         return;
     }
 
-    if (!data.sukses) {
-        tampilkanToast(data.pesan || "Gagal mengumpulkan kuis.", "error");
-        tombolSubmit.disabled = false;
-        tombolSubmit.textContent = "Kumpulkan Kuis";
-        return;
-    }
-
-    hapusProgresLocalStorage();
-    profilMurid.total_poin += data.skor;
-    perbaruiTampilanPoin();
-    tampilkanToast(`Kuis berhasil dikumpulkan! Skor kamu: ${data.skor} / ${data.total_soal}`, "sukses");
-
-    document.getElementById("wadahKuis").innerHTML = `
-        <p class="pesan-sukses mb-0">Kuis berhasil dikumpulkan. Skor kamu: ${data.skor} / ${data.total_soal}</p>
-    `;
+    tampilkanToast(`Kuis "${escapeHtml(judul)}" berhasil dibuat dengan ${soalDenganKuisId.length} soal.`, "sukses");
+    document.getElementById("formKuisBaru").reset();
+    document.getElementById("wadahDaftarSoalForm").innerHTML = "";
+    hitungSoalKuisBaru = 0;
+    tambahBarisSoal();
+    await muatDaftarKuis();
 }
 
 // =====================================================================
 // UTILITAS
 // =====================================================================
-function escapeHtml(teks) {
-    const elemen = document.createElement("div");
-    elemen.textContent = teks;
-    return elemen.innerHTML;
-}
+// Catatan: fungsi escapeHtml() sekarang ada di common.js (dipakai bersama murid.js)
