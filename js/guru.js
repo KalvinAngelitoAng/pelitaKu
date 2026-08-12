@@ -79,7 +79,7 @@ async function bukaDetailMurid(muridId, namaMurid) {
     const modal = new bootstrap.Modal(document.getElementById("modalDetailMurid"));
     modal.show();
 
-    const [hasilKehadiran, hasilRenungan] = await Promise.all([
+    const [hasilKehadiran, hasilRenungan, hasilKlaimSusu] = await Promise.all([
         klienSupabase
             .from("kehadiran")
             .select("*, jadwal_mingguan(minggu_ke, tanggal_mulai)")
@@ -89,11 +89,35 @@ async function bukaDetailMurid(muridId, namaMurid) {
             .from("renungan")
             .select("*, jadwal_mingguan(minggu_ke), ayat_harian(hari, ayat_referensi)")
             .eq("murid_id", muridId)
-            .order("created_at", { ascending: false })
+            .order("created_at", { ascending: false }),
+        klienSupabase
+            .from("reward_claims")
+            .select("*")
+            .eq("murid_id", muridId)
+            .order("tanggal_klaim", { ascending: false })
     ]);
 
     const daftarKehadiran = hasilKehadiran.data || [];
     const daftarRenungan = hasilRenungan.data || [];
+    const daftarKlaimSusu = hasilKlaimSusu.data || [];
+
+    let htmlKlaimSusu = daftarKlaimSusu.length === 0
+        ? `<p class="teks-lembut">Belum ada klaim Susu Gratis.</p>`
+        : `<ul class="list-unstyled">` + daftarKlaimSusu.map((klaim) => `
+            <li class="mb-2 pb-2 d-flex justify-content-between align-items-center" style="border-bottom: 1px solid var(--warna-abu-nonaktif);">
+                <span>
+                    Target ${klaim.target_poin} poin -
+                    <span class="teks-lembut">${new Date(klaim.tanggal_klaim).toLocaleDateString("id-ID")}</span>
+                </span>
+                <label class="d-flex align-items-center gap-2 mb-0" style="cursor:pointer;">
+                    <span class="${klaim.sudah_diberikan ? "status-hadir" : "status-belum"}">
+                        ${klaim.sudah_diberikan ? "Sudah Diberikan" : "Belum Diberikan"}
+                    </span>
+                    <input type="checkbox" ${klaim.sudah_diberikan ? "checked disabled" : ""}
+                        onchange="tandaiSusuDiberikan('${klaim.id}', this)">
+                </label>
+            </li>
+        `).join("") + `</ul>`;
 
     let htmlKehadiran = daftarKehadiran.length === 0
         ? `<p class="teks-lembut">Belum ada riwayat absensi.</p>`
@@ -123,7 +147,30 @@ async function bukaDetailMurid(muridId, namaMurid) {
         <div class="divider-pelitaku"></div>
         <h6 class="fw-bold mb-2">Riwayat Renungan</h6>
         ${htmlRenungan}
+        <div class="divider-pelitaku"></div>
+        <h6 class="fw-bold mb-2">Klaim Susu Gratis</h6>
+        ${htmlKlaimSusu}
     `;
+}
+
+async function tandaiSusuDiberikan(klaimId, checkboxEl) {
+    checkboxEl.disabled = true;
+
+    const { error } = await klienSupabase
+        .from("reward_claims")
+        .update({ sudah_diberikan: true, diberikan_pada: new Date().toISOString() })
+        .eq("id", klaimId);
+
+    if (error) {
+        alert("Gagal menandai klaim ini. Coba lagi.");
+        checkboxEl.disabled = false;
+        checkboxEl.checked = false;
+        return;
+    }
+
+    const labelStatus = checkboxEl.closest("label").querySelector("span");
+    labelStatus.className = "status-hadir";
+    labelStatus.textContent = "Sudah Diberikan";
 }
 
 // =====================================================================

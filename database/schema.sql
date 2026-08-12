@@ -141,6 +141,8 @@ create table public.reward_claims (
     murid_id uuid not null references public.profil (id) on delete cascade,
     target_poin integer not null,
     tanggal_klaim timestamptz not null default now(),
+    sudah_diberikan boolean not null default false,
+    diberikan_pada timestamptz,
     unique (murid_id, target_poin)
 );
 
@@ -312,6 +314,11 @@ using ( murid_id = auth.uid() or public.is_guru() );
 create policy "reward_claims_select_sendiri_atau_guru"
 on public.reward_claims for select
 using ( murid_id = auth.uid() or public.is_guru() );
+
+create policy "reward_claims_update_guru"
+on public.reward_claims for update
+using ( public.is_guru() )
+with check ( public.is_guru() );
 
 -- =====================================================================
 -- RPC 1: CATAT KEHADIRAN "HADIR" (validasi PIN di server)
