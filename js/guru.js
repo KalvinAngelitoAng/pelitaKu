@@ -34,6 +34,7 @@ function pasangEventListenerGuru() {
     document.getElementById("formJadwalBaru").addEventListener("submit", tanganiSimpanJadwalBaru);
     document.getElementById("tombolTambahSoal").addEventListener("click", tambahBarisSoal);
     document.getElementById("formKuisBaru").addEventListener("submit", tanganiSimpanKuisBaru);
+    document.getElementById("formEditWaktuKuis").addEventListener("submit", tanganiSimpanWaktuKuis);
 
     document.getElementById("pilihanHariRenungan").addEventListener("change", (peristiwa) => {
         muatRenunganHarian(peristiwa.target.value);
@@ -386,14 +387,82 @@ async function muatDaftarKuis() {
                 <td>${new Date(kuis.waktu_mulai).toLocaleString("id-ID")}</td>
                 <td>${new Date(kuis.waktu_selesai).toLocaleString("id-ID")}</td>
                 <td>${labelStatus}</td>
-                <td>
+                <td class="d-flex flex-wrap gap-2">
                     <button class="btn btn-pelitaku-outline btn-sm" onclick="bukaDetailSoalKuis('${kuis.id}', '${escapeHtmlGuru(kuis.judul)}')">
                         Lihat Soal
+                    </button>
+                    <button class="btn btn-pelitaku-outline btn-sm" onclick="bukaModalEditWaktu('${kuis.id}', '${escapeHtmlGuru(kuis.judul)}', '${kuis.waktu_mulai}', '${kuis.waktu_selesai}')">
+                        Ubah Waktu
                     </button>
                 </td>
             </tr>
         `;
     }).join("");
+}
+
+/**
+ * Mengubah string waktu ISO (dari database) menjadi format yang bisa dibaca
+ * oleh input type="datetime-local" (yyyy-MM-ddTHH:mm), mengikuti zona waktu lokal.
+ */
+function formatUntukInputDatetimeLocal(waktuIso) {
+    const tanggal = new Date(waktuIso);
+    const offset = tanggal.getTimezoneOffset();
+    const tanggalLokal = new Date(tanggal.getTime() - offset * 60 * 1000);
+    return tanggalLokal.toISOString().slice(0, 16);
+}
+
+function bukaModalEditWaktu(kuisId, judulKuis, waktuMulaiIso, waktuSelesaiIso) {
+    document.getElementById("judulModalEditWaktu").textContent = judulKuis;
+    document.getElementById("inputEditKuisId").value = kuisId;
+    document.getElementById("inputEditWaktuMulai").value = formatUntukInputDatetimeLocal(waktuMulaiIso);
+    document.getElementById("inputEditWaktuSelesai").value = formatUntukInputDatetimeLocal(waktuSelesaiIso);
+    document.getElementById("pesanStatusEditWaktu").innerHTML = "";
+
+    const modal = new bootstrap.Modal(document.getElementById("modalEditWaktuKuis"));
+    modal.show();
+}
+
+async function tanganiSimpanWaktuKuis(peristiwa) {
+    peristiwa.preventDefault();
+    const pesanEl = document.getElementById("pesanStatusEditWaktu");
+
+    const kuisId = document.getElementById("inputEditKuisId").value;
+    const waktuMulaiBaru = document.getElementById("inputEditWaktuMulai").value;
+    const waktuSelesaiBaru = document.getElementById("inputEditWaktuSelesai").value;
+
+    if (!waktuMulaiBaru || !waktuSelesaiBaru || new Date(waktuSelesaiBaru) <= new Date(waktuMulaiBaru)) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">Waktu selesai harus setelah waktu mulai.</p>`;
+        return;
+    }
+
+    const tombolSimpan = document.querySelector("#formEditWaktuKuis button[type=submit]");
+    tombolSimpan.disabled = true;
+    tombolSimpan.textContent = "Menyimpan...";
+
+    const { error } = await klienSupabase
+        .from("kuis")
+        .update({
+            waktu_mulai: new Date(waktuMulaiBaru).toISOString(),
+            waktu_selesai: new Date(waktuSelesaiBaru).toISOString()
+        })
+        .eq("id", kuisId);
+
+    tombolSimpan.disabled = false;
+    tombolSimpan.textContent = "Simpan Perubahan Waktu";
+
+    if (error) {
+        pesanEl.innerHTML = `<p class="pesan-error mb-0">Gagal mengubah waktu kuis: ${error.message}</p>`;
+        return;
+    }
+
+    pesanEl.innerHTML = `<p class="pesan-sukses mb-0">Waktu kuis berhasil diperbarui.</p>`;
+    await muatDaftarKuis();
+
+    setTimeout(() => {
+        const modalEl = document.getElementById("modalEditWaktuKuis");
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+    }, 900);
 }
 
 async function bukaDetailSoalKuis(kuisId, judulKuis) {

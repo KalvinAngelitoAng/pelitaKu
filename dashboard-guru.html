@@ -151,7 +151,7 @@
                                     <th>Waktu Mulai</th>
                                     <th>Waktu Selesai</th>
                                     <th>Status</th>
-                                    <th>Aksi</th>
+                                    <th style="min-width: 200px;">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody id="tabelDaftarKuis">
@@ -205,6 +205,33 @@
                 </div>
                 <div class="modal-body" id="isiModalDetailKuis">
                     <p class="teks-lembut">Memuat soal...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EDIT WAKTU KUIS -->
+    <div class="modal fade" id="modalEditWaktuKuis" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content" style="border-radius: var(--radius-sedang); border: none;">
+                <div class="modal-header">
+                    <h5 class="modal-title">Ubah Waktu Kuis: <span id="judulModalEditWaktu"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formEditWaktuKuis">
+                        <input type="hidden" id="inputEditKuisId">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Waktu Mulai</label>
+                            <input type="datetime-local" id="inputEditWaktuMulai" class="form-control form-control-pelitaku" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Waktu Selesai</label>
+                            <input type="datetime-local" id="inputEditWaktuSelesai" class="form-control form-control-pelitaku" required>
+                        </div>
+                        <div id="pesanStatusEditWaktu" class="mb-2"></div>
+                        <button type="submit" class="btn btn-pelitaku-primer w-100">Simpan Perubahan Waktu</button>
+                    </form>
                 </div>
             </div>
         </div>
