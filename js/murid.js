@@ -30,6 +30,7 @@ let ayatHarianAktif = null; // ayat untuk hari ini (null jika hari Minggu / belu
     await muatStatusAbsensi();
     await muatAyatDanRenunganHarian();
     await muatKuis();
+    await perbaruiStatusTombolNotifikasi();
 
     pasangEventListener();
 })();
