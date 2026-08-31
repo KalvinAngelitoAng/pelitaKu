@@ -9,7 +9,7 @@
 // yang harus dirahasiakan adalah PRIVATE key-nya (jangan taruh di sini).
 // =====================================================================
 
-const VAPID_PUBLIC_KEY = "BERscVDwzJy5xmORr-_wqor_HUF3wpqdlq3Ae2Ba4Sr1VALjuZ45r7mSIcPGTYzKT0LZ0sassMyxWkatLXvLFWs";
+const VAPID_PUBLIC_KEY = "BKe_cWol14_nTGFzx7VUn6k4jGThlnTkFxUDRa8lH1uIbFDN9yN3vAcEkJ9uknw44thUDl4zxnawy3cw1HiASoM";
 
 /**
  * Utilitas wajib: Web Push API minta application server key dalam bentuk
